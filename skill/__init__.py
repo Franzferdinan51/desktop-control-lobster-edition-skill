@@ -171,6 +171,16 @@ class DesktopController:
         bbox = diff.getbbox()
         return {'same_size': True, 'different': bbox is not None, 'bbox': bbox}
 
+    def diff_report(self, before: str, after: str, output_json: Optional[str] = None) -> dict:
+        """Generate a screenshot diff report and optionally save it."""
+        import json
+        report = self.compare_screenshots(before, after)
+        report.update({'before': before, 'after': after})
+        if output_json:
+            Path(output_json).write_text(json.dumps(report, indent=2))
+        self._record_action('diff_report', before=before, after=after, output_json=output_json)
+        return report
+
     def annotate_screenshot(self, image_path: str, output_path: str, boxes: Optional[List[Tuple[int, int, int, int]]] = None, text: Optional[str] = None) -> str:
         """Draw boxes/text onto a screenshot for evidence."""
         from PIL import Image, ImageDraw
@@ -238,6 +248,41 @@ class DesktopController:
             else:
                 raise ValueError(f'Unknown task action: {action}')
         return True
+
+    def preview_task(self, task: dict) -> str:
+        """Return a human-readable task preview."""
+        lines = []
+        for i, step in enumerate(task.get('steps', []), start=1):
+            action = step.get('action')
+            args = step.get('args', {})
+            lines.append(f'{i}. {action} {args}')
+        preview = '\n'.join(lines)
+        self._record_action('preview_task', step_count=len(lines))
+        return preview
+
+    def save_macro(self, filename: str) -> str:
+        """Save the current action log as a macro file."""
+        import json
+        Path(filename).write_text(json.dumps({'macro': self.action_log}, indent=2))
+        self._record_action('save_macro', filename=filename)
+        return filename
+
+    def load_macro(self, filename: str) -> dict:
+        """Load a macro file."""
+        import json
+        data = json.loads(Path(filename).read_text())
+        self._record_action('load_macro', filename=filename)
+        return data
+
+    def start_macro_recording(self) -> None:
+        """Clear the action log and begin recording a macro."""
+        self.action_log = []
+        self._record_action('start_macro_recording')
+
+    def stop_macro_recording(self) -> List[dict]:
+        """Stop recording and return the macro actions."""
+        self._record_action('stop_macro_recording', count=len(self.action_log))
+        return list(self.action_log)
 
     def resume_workflow(self, state_filename: str) -> dict:
         """Resume from a saved workflow state."""
@@ -677,6 +722,15 @@ class DesktopController:
         info = [{'index': 0, 'width': self.screen_width, 'height': self.screen_height}]
         self._record_action('get_monitor_info', count=len(info))
         return info
+
+    def select_monitor(self, index: int = 0) -> dict:
+        """Select a monitor index for future reference (basic helper)."""
+        monitors = self.get_monitor_info()
+        if index < 0 or index >= len(monitors):
+            raise IndexError(f'Monitor index out of range: {index}')
+        selected = monitors[index]
+        self._record_action('select_monitor', index=index)
+        return selected
 
     def activate_window(self, title_substring: str) -> bool:
         """
