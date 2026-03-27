@@ -777,6 +777,53 @@ class DesktopController:
         self._record_action('workflow_report', step_count=len(task.get('steps', [])))
         return report
 
+    def openclaw_summary(self) -> dict:
+        """Return an OpenClaw-friendly snapshot of controller state."""
+        summary = {
+            'screen': [self.screen_width, self.screen_height],
+            'active_window': self.get_active_window(),
+            'mouse': list(self.get_mouse_position()),
+            'failsafe': self.failsafe,
+            'require_approval': self.require_approval,
+            'dry_run': self.dry_run,
+            'workflow_state': self.workflow_state,
+            'failure_count': self.failure_count,
+            'policy': {
+                'approval_actions': list(self.policy.get('approval_actions', [])),
+                'approval_windows': self.policy.get('approval_windows', []),
+                'approval_apps': self.policy.get('approval_apps', []),
+            },
+            'last_action': self.action_log[-1] if self.action_log else None,
+        }
+        self._record_action('openclaw_summary', active_window=summary['active_window'])
+        return summary
+
+    def export_openclaw_bundle(self, prefix: str) -> dict:
+        """Export an OpenClaw bundle: summary, state, log, and screenshot."""
+        import json
+        prefix_path = Path(prefix)
+        prefix_path.parent.mkdir(parents=True, exist_ok=True)
+        summary = self.openclaw_summary()
+        summary_path = str(prefix_path.with_suffix('.summary.json'))
+        state_path = str(prefix_path.with_suffix('.state.json'))
+        log_path = str(prefix_path.with_suffix('.actions.json'))
+        shot_path = str(prefix_path.with_suffix('.png'))
+        state = {
+            'screen': [self.screen_width, self.screen_height],
+            'active_window': self.get_active_window(),
+            'mouse': list(self.get_mouse_position()),
+            'workflow_state': self.workflow_state,
+            'failure_count': self.failure_count,
+            'timestamp': time.time(),
+        }
+        Path(summary_path).write_text(json.dumps(summary, indent=2))
+        Path(state_path).write_text(json.dumps(state, indent=2))
+        Path(log_path).write_text(json.dumps(self.action_log, indent=2))
+        self.screenshot(filename=shot_path)
+        bundle = {'summary': summary_path, 'state': state_path, 'actions': log_path, 'screenshot': shot_path}
+        self._record_action('export_openclaw_bundle', prefix=prefix, bundle=bundle)
+        return bundle
+
     def set_policy(self, approval_actions: Optional[List[str]] = None, approval_windows: Optional[List[str]] = None, approval_apps: Optional[List[str]] = None) -> dict:
         """Set policy rules for approvals."""
         if approval_actions is not None:
