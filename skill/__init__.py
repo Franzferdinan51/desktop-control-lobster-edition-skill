@@ -198,6 +198,56 @@ class DesktopController:
         self._record_action('save_task', filename=filename)
         return filename
 
+    def run_task(self, task: dict) -> bool:
+        """Run a task definition with steps and optional checkpoints."""
+        steps = task.get('steps', [])
+        for idx, step in enumerate(steps, start=1):
+            action = step.get('action')
+            args = step.get('args', {})
+            self._record_action('task_step', step=idx, step_action=action)
+            if action == 'click':
+                self.click(**args)
+            elif action == 'move_mouse':
+                self.move_mouse(**args)
+            elif action == 'move_relative':
+                self.move_relative(**args)
+            elif action == 'type_text':
+                self.type_text(**args)
+            elif action == 'press':
+                self.press(**args)
+            elif action == 'hotkey':
+                self.hotkey(*args.get('keys', []), interval=args.get('interval', 0.05))
+            elif action == 'wait_for_image':
+                self.wait_for_image(**args)
+            elif action == 'click_image':
+                self.click_image(**args)
+            elif action == 'checkpoint':
+                self.checkpoint(args.get('label', f'step_{idx}'), args.get('evidence_path'))
+            elif action == 'browser_navigate':
+                self.browser_navigate(**args)
+            elif action == 'run_command':
+                self.run_command(**args)
+            else:
+                raise ValueError(f'Unknown task action: {action}')
+        return True
+
+    def resume_workflow(self, state_filename: str) -> dict:
+        """Resume from a saved workflow state."""
+        state = self.load_state(state_filename)
+        self._record_action('resume_workflow', filename=state_filename)
+        return state
+
+    def approval_gate(self, label: str, screenshot_file: Optional[str] = None) -> bool:
+        """Explicit approval gate for risky steps."""
+        note = f'Approval gate: {label}'
+        if screenshot_file:
+            note += f' | screenshot: {screenshot_file}'
+        return self._check_approval(note)
+
+    def window_exists(self, title_substring: str) -> bool:
+        """Check if a window title is present."""
+        return any(title_substring.lower() in w.lower() for w in self.get_all_windows())
+
     # ========== MOUSE OPERATIONS ==========
     
     @retry(max_attempts=3, backoff_factor=0.2)

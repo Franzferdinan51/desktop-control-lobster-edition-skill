@@ -18,6 +18,7 @@ Built to be reliable in real-world macOS use: smooth enough for normal work, str
 - Copy/paste via clipboard
 - Save/resume workflow state and task files
 - Annotate screenshots and compare before/after images
+- Run JSON task definitions with checkpoints and actions
 - Support higher-level AI desktop workflows
 - Provide checkpoint, queue, and audit-friendly controls
 
@@ -80,8 +81,8 @@ print(ctrl.get_pixel_color(10, 10))
 - `verify_action()` for post-action validation
 - `run_workflow()` for chaining desktop steps
 - `browser_navigate()`, `open_app()`, `run_applescript()`, and `run_command()` for simple browser/terminal/macOS automation
-- `checkpoint()`, `run_queue()`, `capture_evidence()`, and `export_action_log()` for CoWork-style workflows
-- `save_state()`, `load_state()`, `save_task()`, `load_task()`, `annotate_screenshot()`, and `compare_screenshots()` for durable workflows
+- `checkpoint()`, `approval_gate()`, `run_queue()`, `capture_evidence()`, and `export_action_log()` for CoWork-style workflows
+- `save_state()`, `load_state()`, `resume_workflow()`, `save_task()`, `load_task()`, `run_task()`, `annotate_screenshot()`, and `compare_screenshots()` for durable workflows
 
 ## Credits
 - **Original skill source:** ClawHub `matagul/desktop-control` (https://clawhub.ai/matagul/desktop-control)
