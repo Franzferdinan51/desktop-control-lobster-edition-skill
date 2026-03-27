@@ -1097,7 +1097,7 @@ class DesktopController:
             return expected.lower() in active.lower()
         return expected.lower() in active.lower()
 
-    def safe_type(self, text: str, target: Optional[str] = None, verify: Optional[Callable[[], bool]] = None, retries: int = 2, settle_ms: int = 150, paste: bool = True) -> dict:
+    def safe_type(self, text: str, target: Optional[str] = None, verify: Optional[Callable[[], bool]] = None, retries: int = 2, settle_ms: int = 150, paste: bool = True, vision_fallback: bool = True) -> dict:
         """Focus a target then type/paste text with verification and retries."""
         attempts = 0
         last_error = None
@@ -1113,13 +1113,18 @@ class DesktopController:
                     self._clear_failure()
                     self._record_action('safe_type', target=target, attempts=attempts, paste=paste)
                     return {'ok': True, 'attempts': attempts}
+                if vision_fallback and target:
+                    assist = self.vision_assist(f'Verify whether text "{text}" landed in {target}')
+                    if assist.get('ok'):
+                        self._record_action('safe_type_vision_help', target=target, attempts=attempts)
+                        return {'ok': True, 'attempts': attempts, 'vision': assist}
             except Exception as e:
                 last_error = str(e)
                 self._register_failure(f'safe_type:{e}')
                 time.sleep(0.25 * attempts)
         return {'ok': False, 'attempts': attempts, 'error': last_error}
 
-    def safe_click_type(self, click_xy: Tuple[int, int], text: str, expected_focus: Optional[str] = None, verify_text: Optional[Callable[[], bool]] = None, retries: int = 2) -> dict:
+    def safe_click_type(self, click_xy: Tuple[int, int], text: str, expected_focus: Optional[str] = None, verify_text: Optional[Callable[[], bool]] = None, retries: int = 2, vision_fallback: bool = True) -> dict:
         """Click a target then type/paste text with retries and verification."""
         attempts = 0
         last_error = None
@@ -1138,6 +1143,11 @@ class DesktopController:
                     self._clear_failure()
                     self._record_action('safe_click_type', click_xy=click_xy, attempts=attempts)
                     return {'ok': True, 'attempts': attempts}
+                if vision_fallback and expected_focus:
+                    assist = self.vision_assist(f'Verify whether clicking at {click_xy} and typing "{text}" succeeded in {expected_focus}')
+                    if assist.get('ok'):
+                        self._record_action('safe_click_type_vision_help', click_xy=click_xy, attempts=attempts)
+                        return {'ok': True, 'attempts': attempts, 'vision': assist}
             except Exception as e:
                 last_error = str(e)
                 self._register_failure(f'safe_click_type:{e}')

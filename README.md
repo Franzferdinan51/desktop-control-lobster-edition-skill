@@ -25,7 +25,7 @@ Built to be reliable in real-world macOS use: smooth enough for normal work, str
 - Use policy rules for approval gating
 - Support higher-level AI desktop workflows
 - OpenClaw-native summary and export bundles for agents
-- Vision broker helpers to escalate screenshots to LM Studio or AI Council when needed
+- Vision broker helpers to escalate screenshots to LM Studio or AI Council when needed, including fallback assistance from `safe_type()` / `safe_click_type()` when verification fails
 - Safer wrapper APIs to reduce failures:
   - `wait_for_focus()`
   - `safe_type()`
