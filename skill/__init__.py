@@ -70,6 +70,9 @@ class DesktopController:
             'approval_windows': [],
             'approval_apps': [],
         }
+        self.workflow_state = {'state': 'idle', 'last_error': None, 'last_step': None}
+        self.failure_count = 0
+        self.failure_threshold = 3
 
     def _record_action(self, action: str, **details) -> None:
         entry = {
@@ -950,6 +953,172 @@ class DesktopController:
                 pass
             time.sleep(interval)
         return False
+
+    def _register_failure(self, label: str, screenshot_prefix: str = 'failure') -> None:
+        self.failure_count += 1
+        self.workflow_state['state'] = 'error'
+        self.workflow_state['last_error'] = label
+        try:
+            path = f'/tmp/{screenshot_prefix}-{int(time.time())}.png'
+            self.screenshot(filename=path)
+        except Exception:
+            path = None
+        self._record_action('failure', label=label, failure_count=self.failure_count, screenshot=path)
+        if self.failure_count >= self.failure_threshold:
+            logger.warning('Failure threshold reached; circuit breaker engaged')
+
+    def _clear_failure(self) -> None:
+        self.failure_count = 0
+        self.workflow_state['state'] = 'ready'
+        self.workflow_state['last_error'] = None
+
+    def wait_for_focus(self, window_title: Optional[str] = None, timeout: float = 5.0, poll: float = 0.1) -> dict:
+        """Wait until the expected window/app is active."""
+        start = time.time()
+        last = None
+        while time.time() - start < timeout:
+            last = self.get_active_window()
+            if window_title is None or (last and window_title.lower() in last.lower()):
+                self._record_action('wait_for_focus', window_title=window_title, active=last)
+                return {'ok': True, 'active': last}
+            time.sleep(poll)
+        self._register_failure(f'wait_for_focus:{window_title}')
+        raise TimeoutError(f'Focus timeout waiting for {window_title}; last={last}')
+
+    def verify_focus(self, expected: str, mode: str = 'title') -> bool:
+        active = self.get_active_window() or ''
+        if mode == 'title':
+            return expected.lower() in active.lower()
+        return expected.lower() in active.lower()
+
+    def safe_type(self, text: str, target: Optional[str] = None, verify: Optional[Callable[[], bool]] = None, retries: int = 2, settle_ms: int = 150, paste: bool = True) -> dict:
+        """Focus a target then type/paste text with verification and retries."""
+        attempts = 0
+        last_error = None
+        while attempts <= retries:
+            attempts += 1
+            try:
+                if target:
+                    self.wait_for_focus(target, timeout=5.0)
+                time.sleep(settle_ms / 1000.0)
+                self.type_text(text, paste=paste)
+                ok = verify() if verify else True
+                if ok:
+                    self._clear_failure()
+                    self._record_action('safe_type', target=target, attempts=attempts, paste=paste)
+                    return {'ok': True, 'attempts': attempts}
+            except Exception as e:
+                last_error = str(e)
+                self._register_failure(f'safe_type:{e}')
+                time.sleep(0.25 * attempts)
+        return {'ok': False, 'attempts': attempts, 'error': last_error}
+
+    def safe_click_type(self, click_xy: Tuple[int, int], text: str, expected_focus: Optional[str] = None, verify_text: Optional[Callable[[], bool]] = None, retries: int = 2) -> dict:
+        """Click a target then type/paste text with retries and verification."""
+        attempts = 0
+        last_error = None
+        offsets = [(0, 0), (4, 0), (-4, 0), (0, 4), (0, -4), (6, 6), (-6, -6)]
+        while attempts <= retries:
+            attempts += 1
+            try:
+                if expected_focus:
+                    self.wait_for_focus(expected_focus, timeout=5.0)
+                ox, oy = offsets[min(attempts - 1, len(offsets) - 1)]
+                self.click(click_xy[0] + ox, click_xy[1] + oy)
+                time.sleep(0.2)
+                self.type_text(text, paste=True)
+                ok = verify_text() if verify_text else True
+                if ok:
+                    self._clear_failure()
+                    self._record_action('safe_click_type', click_xy=click_xy, attempts=attempts)
+                    return {'ok': True, 'attempts': attempts}
+            except Exception as e:
+                last_error = str(e)
+                self._register_failure(f'safe_click_type:{e}')
+                time.sleep(0.25 * attempts)
+        return {'ok': False, 'attempts': attempts, 'error': last_error}
+
+    def safe_hotkey(self, *keys, require_focus: Optional[str] = None, verify_action: Optional[Callable[[], bool]] = None, retries: int = 1) -> dict:
+        """Hotkey with focus checks and post-action verification."""
+        attempts = 0
+        last_error = None
+        while attempts <= retries:
+            attempts += 1
+            try:
+                if require_focus:
+                    self.wait_for_focus(require_focus, timeout=5.0)
+                self.hotkey(*keys)
+                ok = verify_action() if verify_action else True
+                if ok:
+                    self._clear_failure()
+                    self._record_action('safe_hotkey', keys=list(keys), attempts=attempts)
+                    return {'ok': True, 'attempts': attempts}
+            except Exception as e:
+                last_error = str(e)
+                self._register_failure(f'safe_hotkey:{e}')
+        return {'ok': False, 'attempts': attempts, 'error': last_error}
+
+    def wait_for_window(self, window_title: str, timeout: float = 5.0, poll: float = 0.2) -> dict:
+        """Wait until a window appears in the window list."""
+        start = time.time()
+        while time.time() - start < timeout:
+            if self.window_exists(window_title):
+                self._record_action('wait_for_window', window_title=window_title)
+                return {'ok': True}
+            time.sleep(poll)
+        self._register_failure(f'wait_for_window:{window_title}')
+        raise TimeoutError(f'Window timeout waiting for {window_title}')
+
+    def click_with_retries(self, x: int, y: int, retries: int = 3, jitter: int = 6, fallback_strategy: str = 'spiral') -> dict:
+        """Click near a point with retry offsets."""
+        offsets = [(0, 0), (jitter, 0), (-jitter, 0), (0, jitter), (0, -jitter), (jitter, jitter), (-jitter, -jitter)]
+        attempts = 0
+        last_error = None
+        for dx, dy in offsets[:retries+1]:
+            attempts += 1
+            try:
+                self.click(x + dx, y + dy)
+                self._clear_failure()
+                self._record_action('click_with_retries', x=x, y=y, attempts=attempts)
+                return {'ok': True, 'attempts': attempts, 'xy': (x + dx, y + dy)}
+            except Exception as e:
+                last_error = str(e)
+                self._register_failure(f'click_with_retries:{e}')
+        return {'ok': False, 'attempts': attempts, 'error': last_error}
+
+    def type_then_confirm(self, text: str, confirm_fn: Callable[[], bool], retries: int = 2) -> dict:
+        """Type text, then confirm success with a callback."""
+        result = self.safe_type(text, retries=retries, verify=confirm_fn)
+        self._record_action('type_then_confirm', ok=result.get('ok'))
+        return result
+
+    def verify_text_present(self, text: str, region: Optional[Tuple[int, int, int, int]] = None, mode: str = 'ocr', timeout: float = 2.0) -> dict:
+        """Best-effort text presence verification."""
+        # OCR support can be layered in later; for now, capture screenshot evidence and succeed if caller handles verification externally.
+        img = self.screenshot(region=region)
+        self._record_action('verify_text_present', text=text, region=region, mode=mode, screenshot=bool(img))
+        return {'ok': False, 'mode': mode, 'note': 'OCR not wired; use caller verify callback'}
+
+    def workflow_guard(self, name: str, preconditions: Optional[List[Callable[[], bool]]] = None, postconditions: Optional[List[Callable[[], bool]]] = None, strict: bool = True) -> dict:
+        """Run a guarded workflow block."""
+        preconditions = preconditions or []
+        postconditions = postconditions or []
+        for fn in preconditions:
+            if not fn():
+                self._register_failure(f'workflow_guard_pre:{name}')
+                if strict:
+                    raise RuntimeError(f'Precondition failed: {name}')
+        self.workflow_state['state'] = 'running'
+        self._record_action('workflow_guard_start', name=name)
+        # caller executes steps separately; this is a guard primitive
+        for fn in postconditions:
+            if not fn():
+                self._register_failure(f'workflow_guard_post:{name}')
+                if strict:
+                    raise RuntimeError(f'Postcondition failed: {name}')
+        self._record_action('workflow_guard_end', name=name)
+        self.workflow_state['state'] = 'ready'
+        return {'ok': True, 'name': name}
 
     def _check_approval(self, action: str) -> bool:
         """
