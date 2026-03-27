@@ -1092,12 +1092,39 @@ class DesktopController:
         self._record_action('type_then_confirm', ok=result.get('ok'))
         return result
 
+    def ocr_text_from_region(self, region: Optional[Tuple[int, int, int, int]] = None) -> Optional[str]:
+        """Extract text from a screenshot region using pytesseract if available."""
+        try:
+            import pytesseract
+        except ImportError:
+            logger.error('pytesseract not installed. Run: pip install pytesseract')
+            return None
+        img = self.screenshot(region=region)
+        if img is None:
+            return None
+        try:
+            return pytesseract.image_to_string(img)
+        except Exception as e:
+            logger.error(f'OCR failed: {e}')
+            return None
+
+    def find_text_on_screen(self, text: str, region: Optional[Tuple[int, int, int, int]] = None) -> dict:
+        """Find text using OCR and return a best-effort match summary."""
+        ocr_text = self.ocr_text_from_region(region=region) or ''
+        ok = text.lower() in ocr_text.lower()
+        self._record_action('find_text_on_screen', text=text, region=region, ok=ok)
+        return {'ok': ok, 'text': ocr_text[:500]}
+
     def verify_text_present(self, text: str, region: Optional[Tuple[int, int, int, int]] = None, mode: str = 'ocr', timeout: float = 2.0) -> dict:
         """Best-effort text presence verification."""
-        # OCR support can be layered in later; for now, capture screenshot evidence and succeed if caller handles verification externally.
+        if mode == 'ocr':
+            ocr_text = self.ocr_text_from_region(region=region) or ''
+            ok = text.lower() in ocr_text.lower()
+            self._record_action('verify_text_present', text=text, region=region, mode=mode, ok=ok)
+            return {'ok': ok, 'mode': mode, 'text': ocr_text[:500]}
         img = self.screenshot(region=region)
         self._record_action('verify_text_present', text=text, region=region, mode=mode, screenshot=bool(img))
-        return {'ok': False, 'mode': mode, 'note': 'OCR not wired; use caller verify callback'}
+        return {'ok': False, 'mode': mode, 'note': 'Unsupported mode'}
 
     def workflow_guard(self, name: str, preconditions: Optional[List[Callable[[], bool]]] = None, postconditions: Optional[List[Callable[[], bool]]] = None, strict: bool = True) -> dict:
         """Run a guarded workflow block."""

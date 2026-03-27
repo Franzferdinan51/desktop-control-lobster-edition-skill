@@ -11,6 +11,7 @@ Built to be reliable in real-world macOS use: smooth enough for normal work, str
 - Use hotkeys and special keys
 - Capture screenshots and sample pixel colors
 - Search for UI images with confidence + region controls
+- OCR text verification and text search
 - Retry flaky actions with backoff
 - Verify actions after they run
 - Open apps and run AppleScript on macOS
@@ -89,6 +90,7 @@ print(ctrl.get_pixel_color(10, 10))
 - `find_on_screen_retry()` for confidence-based image search with fallback retries
 - `click_image()` for image-based clicking
 - `wait_for_image()` for UI readiness checks
+- `ocr_text_from_region()`, `find_text_on_screen()`, and `verify_text_present()` for OCR vision helpers
 - `verify_action()` for post-action validation
 - `run_workflow()` for chaining desktop steps
 - `browser_navigate()`, `open_app()`, `run_applescript()`, and `run_command()` for simple browser/terminal/macOS automation
