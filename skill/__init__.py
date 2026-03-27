@@ -749,7 +749,30 @@ class DesktopController:
     def translate_coordinates(self, x: int, y: int, monitor_index: int = 0) -> Tuple[int, int]:
         """Translate coordinates relative to a selected monitor."""
         monitor = self.select_monitor(monitor_index)
-        return (x + 0, y + 0) if monitor['index'] == 0 else (x, y)
+        # Basic single-monitor fallback; multi-monitor offset support can be extended when display origins are available.
+        return (x, y) if monitor['index'] == 0 else (x, y)
+
+    def validate_task(self, task: dict) -> dict:
+        """Validate a task definition and return a summary."""
+        errors = []
+        if 'steps' not in task or not isinstance(task['steps'], list):
+            errors.append('task.steps must be a list')
+        allowed = {'click', 'move_mouse', 'move_relative', 'type_text', 'press', 'hotkey', 'wait_for_image', 'click_image', 'checkpoint', 'browser_navigate', 'run_command', 'if_window_exists'}
+        for i, step in enumerate(task.get('steps', []), start=1):
+            if not isinstance(step, dict):
+                errors.append(f'step {i} must be an object')
+                continue
+            if step.get('action') not in allowed:
+                errors.append(f'step {i}: unknown action {step.get("action")}')
+        summary = {'valid': not errors, 'errors': errors, 'step_count': len(task.get('steps', []))}
+        self._record_action('validate_task', valid=summary['valid'], error_count=len(errors))
+        return summary
+
+    def workflow_report(self, task: dict) -> dict:
+        """Generate a combined preview + validation report."""
+        report = {'preview': self.preview_task(task), 'validation': self.validate_task(task)}
+        self._record_action('workflow_report', step_count=len(task.get('steps', [])))
+        return report
 
     def set_policy(self, approval_actions: Optional[List[str]] = None, approval_windows: Optional[List[str]] = None, approval_apps: Optional[List[str]] = None) -> dict:
         """Set policy rules for approvals."""
