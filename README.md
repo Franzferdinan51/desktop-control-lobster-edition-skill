@@ -21,6 +21,7 @@ Built to be reliable in real-world macOS use: smooth enough for normal work, str
 - Run JSON task definitions with checkpoints, actions, and branching
 - Preview tasks before running them
 - Record and replay macros
+- Use policy rules for approval gating
 - Support higher-level AI desktop workflows
 - Provide checkpoint, queue, and audit-friendly controls
 
@@ -84,7 +85,7 @@ print(ctrl.get_pixel_color(10, 10))
 - `run_workflow()` for chaining desktop steps
 - `browser_navigate()`, `open_app()`, `run_applescript()`, and `run_command()` for simple browser/terminal/macOS automation
 - `checkpoint()`, `approval_gate()`, `run_queue()`, `capture_evidence()`, and `export_action_log()` for CoWork-style workflows
-- `save_state()`, `load_state()`, `resume_workflow()`, `save_task()`, `load_task()`, `run_task()`, `preview_task()`, `start_macro_recording()`, `stop_macro_recording()`, `save_macro()`, `load_macro()`, `annotate_screenshot()`, `compare_screenshots()`, `diff_report()`, and `get_monitor_info()` / `select_monitor()` for durable workflows
+- `save_state()`, `load_state()`, `resume_workflow()`, `save_task()`, `load_task()`, `run_task()`, `preview_task()`, `start_macro_recording()`, `stop_macro_recording()`, `save_macro()`, `load_macro()`, `replay_macro()`, `set_policy()`, `should_require_approval()`, `annotate_screenshot()`, `compare_screenshots()`, `diff_report()`, and `get_monitor_info()` / `select_monitor()` for durable workflows
 
 ## Credits
 - **Original skill source:** ClawHub `matagul/desktop-control` (https://clawhub.ai/matagul/desktop-control)

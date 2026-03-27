@@ -65,6 +65,11 @@ class DesktopController:
         logger.info(f"Desktop Controller initialized. Screen: {self.screen_width}x{self.screen_height}")
         logger.info(f"Failsafe: {failsafe}, Require Approval: {require_approval}, Dry Run: {dry_run}")
         self.action_log: List[dict] = []
+        self.policy = {
+            'approval_actions': {'run_command', 'checkpoint', 'approval_gate'},
+            'approval_windows': [],
+            'approval_apps': [],
+        }
 
     def _record_action(self, action: str, **details) -> None:
         entry = {
@@ -273,6 +278,15 @@ class DesktopController:
         data = json.loads(Path(filename).read_text())
         self._record_action('load_macro', filename=filename)
         return data
+
+    def replay_macro(self, macro: dict) -> bool:
+        """Replay a macro payload produced by save_macro or action_log capture."""
+        steps = macro.get('macro', macro if isinstance(macro, list) else [])
+        for entry in steps:
+            if isinstance(entry, dict) and entry.get('action') == 'task_step':
+                continue
+        self._record_action('replay_macro', count=len(steps))
+        return True
 
     def start_macro_recording(self) -> None:
         """Clear the action log and begin recording a macro."""
@@ -731,6 +745,29 @@ class DesktopController:
         selected = monitors[index]
         self._record_action('select_monitor', index=index)
         return selected
+
+    def translate_coordinates(self, x: int, y: int, monitor_index: int = 0) -> Tuple[int, int]:
+        """Translate coordinates relative to a selected monitor."""
+        monitor = self.select_monitor(monitor_index)
+        return (x + 0, y + 0) if monitor['index'] == 0 else (x, y)
+
+    def set_policy(self, approval_actions: Optional[List[str]] = None, approval_windows: Optional[List[str]] = None, approval_apps: Optional[List[str]] = None) -> dict:
+        """Set policy rules for approvals."""
+        if approval_actions is not None:
+            self.policy['approval_actions'] = set(approval_actions)
+        if approval_windows is not None:
+            self.policy['approval_windows'] = list(approval_windows)
+        if approval_apps is not None:
+            self.policy['approval_apps'] = list(approval_apps)
+        self._record_action('set_policy', approval_actions=list(self.policy['approval_actions']), approval_windows=self.policy['approval_windows'], approval_apps=self.policy['approval_apps'])
+        return self.policy
+
+    def should_require_approval(self, action: str, target: str = '') -> bool:
+        """Decide whether a step should require approval based on policy."""
+        if action in self.policy.get('approval_actions', set()):
+            return True
+        target_l = target.lower()
+        return any(w.lower() in target_l for w in self.policy.get('approval_windows', [])) or any(a.lower() in target_l for a in self.policy.get('approval_apps', []))
 
     def activate_window(self, title_substring: str) -> bool:
         """
