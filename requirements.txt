@@ -1,0 +1,6 @@
+pyautogui
+pillow
+opencv-python
+pygetwindow
+pyperclip
+rubicon-objc
