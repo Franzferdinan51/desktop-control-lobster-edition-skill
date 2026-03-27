@@ -227,6 +227,14 @@ class DesktopController:
                 self.browser_navigate(**args)
             elif action == 'run_command':
                 self.run_command(**args)
+            elif action == 'if_window_exists':
+                title = args.get('title', '')
+                then_steps = args.get('then', [])
+                else_steps = args.get('else', [])
+                branch = then_steps if self.window_exists(title) else else_steps
+                for sub_idx, sub_step in enumerate(branch, start=1):
+                    self._record_action('branch_step', parent_step=idx, branch_step=sub_idx, title=title)
+                    self.run_task({'steps': [sub_step]})
             else:
                 raise ValueError(f'Unknown task action: {action}')
         return True
@@ -664,6 +672,12 @@ class DesktopController:
             logger.error(f"Error getting windows: {e}")
             return []
     
+    def get_monitor_info(self) -> List[dict]:
+        """Return basic monitor/screen info when available."""
+        info = [{'index': 0, 'width': self.screen_width, 'height': self.screen_height}]
+        self._record_action('get_monitor_info', count=len(info))
+        return info
+
     def activate_window(self, title_substring: str) -> bool:
         """
         Bring window to front by title (partial match).
