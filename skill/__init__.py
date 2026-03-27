@@ -7,6 +7,7 @@ import pyautogui
 import time
 import sys
 import subprocess
+import os
 from functools import wraps
 from typing import Tuple, Optional, List, Union, Callable, Any
 from pathlib import Path
@@ -73,6 +74,11 @@ class DesktopController:
         self.workflow_state = {'state': 'idle', 'last_error': None, 'last_step': None}
         self.failure_count = 0
         self.failure_threshold = 3
+        self.resource_broker = {
+            'vision_endpoint': None,
+            'vision_model': None,
+            'council_endpoint': None,
+        }
 
     def _record_action(self, action: str, **details) -> None:
         entry = {
@@ -823,6 +829,59 @@ class DesktopController:
         bundle = {'summary': summary_path, 'state': state_path, 'actions': log_path, 'screenshot': shot_path}
         self._record_action('export_openclaw_bundle', prefix=prefix, bundle=bundle)
         return bundle
+
+    def set_resource_broker(self, vision_endpoint: Optional[str] = None, vision_model: Optional[str] = None, council_endpoint: Optional[str] = None) -> dict:
+        """Configure fallback resources like LM Studio vision or AI Council."""
+        if vision_endpoint is not None:
+            self.resource_broker['vision_endpoint'] = vision_endpoint
+        if vision_model is not None:
+            self.resource_broker['vision_model'] = vision_model
+        if council_endpoint is not None:
+            self.resource_broker['council_endpoint'] = council_endpoint
+        self._record_action('set_resource_broker', **self.resource_broker)
+        return self.resource_broker
+
+    def vision_assist(self, prompt: str, screenshot_path: Optional[str] = None, use_council: bool = True) -> dict:
+        """Ask a vision-capable resource for help, with optional AI Council escalation."""
+        import json, base64
+        screenshot_path = screenshot_path or self.screenshot(filename=f'/tmp/vision-{int(time.time())}.png')
+        vision_endpoint = self.resource_broker.get('vision_endpoint') or os.environ.get('OPENCLAW_VISION_ENDPOINT')
+        vision_model = self.resource_broker.get('vision_model') or os.environ.get('OPENCLAW_VISION_MODEL')
+        council_endpoint = self.resource_broker.get('council_endpoint') or os.environ.get('OPENCLAW_COUNCIL_ENDPOINT')
+        payload = {'prompt': prompt, 'screenshot': screenshot_path, 'vision_endpoint': vision_endpoint, 'vision_model': vision_model, 'council_endpoint': council_endpoint}
+        self._record_action('vision_assist', prompt=prompt[:120], screenshot=screenshot_path)
+        # If a vision endpoint is configured, try a simple OpenAI-compatible chat-completions call with an image.
+        if vision_endpoint:
+            try:
+                import requests
+                with open(screenshot_path, 'rb') as f:
+                    img_b64 = base64.b64encode(f.read()).decode('ascii')
+                body = {
+                    'model': vision_model or 'vision-model',
+                    'messages': [
+                        {'role': 'user', 'content': [
+                            {'type': 'text', 'text': prompt},
+                            {'type': 'image_url', 'image_url': {'url': f'data:image/png;base64,{img_b64}'}}
+                        ]}
+                    ]
+                }
+                resp = requests.post(f"{vision_endpoint.rstrip('/')}/chat/completions", json=body, timeout=30)
+                resp.raise_for_status()
+                data = resp.json()
+                text = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+                return {'ok': True, 'source': 'vision_endpoint', 'text': text, 'payload': payload}
+            except Exception as e:
+                payload['vision_error'] = str(e)
+        # Optional council escalation: write a request bundle if endpoint is configured, otherwise return a structured payload.
+        if use_council and council_endpoint:
+            try:
+                import requests
+                resp = requests.post(council_endpoint.rstrip('/') + '/vision-assist', json=payload, timeout=30)
+                resp.raise_for_status()
+                return {'ok': True, 'source': 'council', 'text': resp.text, 'payload': payload}
+            except Exception as e:
+                payload['council_error'] = str(e)
+        return {'ok': False, 'source': 'fallback', 'payload': payload}
 
     def set_policy(self, approval_actions: Optional[List[str]] = None, approval_windows: Optional[List[str]] = None, approval_apps: Optional[List[str]] = None) -> dict:
         """Set policy rules for approvals."""
