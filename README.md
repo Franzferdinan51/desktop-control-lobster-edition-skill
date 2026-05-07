@@ -1,12 +1,12 @@
 # Newest Desktop Control
 
-One MCP server for agent control across macOS desktop apps, Codex Computer Use, and Android devices.
+One MCP server for agent control across macOS, Linux, Windows, Codex Computer Use, and Android devices.
 
 This repo replaces the older `desktop-control-lobster-edition-skill` Python skill layout with a consolidated Node.js MCP gateway. It merges the useful desktop-control surface from `gui-control-lobster`, `computer-use-lobster`, and `computer-use-tool`, then adds Android ADB controls and Codex Computer Use detection.
 
 ## What This Gives Agents
 
-- Desktop screenshots, mouse, keyboard, clipboard, screen, pixel, app launch, and window activation tools.
+- Desktop screenshots, mouse, keyboard, clipboard, screen, pixel, app launch, terminal, file, and window activation tools.
 - Compatibility aliases for the older `screenshot`, `mouse_click`, `keyboard`, and `computer_use_*` tool names.
 - Android phone and emulator control through ADB: screenshots, taps, swipes, text input, key events, app launch, UI dump, logcat, screen size, and focused activity.
 - Codex Computer Use discovery and ready-to-use MCP config generation for the supported `SkyComputerUseClient mcp` entry point.
@@ -31,10 +31,10 @@ The server speaks JSON-RPC over stdio, as expected by Codex and other MCP client
 ## Requirements
 
 - Node.js 18 or newer.
-- macOS for the full desktop backend.
+- macOS, Linux, or Windows for desktop automation.
 - Python 3 with PyAutoGUI and Pillow for mouse, keyboard, pixel, and fallback screenshot actions.
 - ADB for Android controls.
-- Codex.app installed if you want Codex Computer Use detection.
+- Codex.app on macOS if you want Codex Computer Use detection.
 
 Install the Python dependencies:
 
@@ -49,6 +49,23 @@ adb devices -l
 ```
 
 For physical Android phones, enable Developer Options and USB debugging. For emulators, start the emulator before calling Android tools.
+
+### Platform Notes
+
+macOS uses `screencapture`, `pbcopy`, `pbpaste`, `open`, and `osascript` where available.
+
+Linux uses PyAutoGUI for screen/input automation and native command-line tools for desktop integration:
+
+- `xdg-open` for app/path/URL launch.
+- `wmctrl` for window list and activation.
+- `wl-copy`/`wl-paste`, `xclip`, or `xsel` for clipboard.
+
+Windows uses PyAutoGUI for screen/input automation and PowerShell/cmd for desktop integration:
+
+- `powershell.exe` for clipboard, terminal commands, and window helpers.
+- `cmd.exe start` for app/path/URL launch.
+
+Window activation depends on the desktop environment and OS focus rules. Some Linux Wayland compositors and Windows elevated/non-elevated app boundaries may block focus changes.
 
 ## Codex MCP Config
 
@@ -166,17 +183,21 @@ Canonical tools are namespaced by backend. Compatibility aliases are kept so old
 - `codex_mcp_config`
 - `permissions_check`
 
-## macOS Permissions
+## Desktop Permissions
 
-macOS may block screenshots and input automation until the host process has permission.
+Operating systems may block screenshots and input automation until the host process has permission.
 
-Grant permissions to the app or terminal that launches this MCP server:
+On macOS, grant permissions to the app or terminal that launches this MCP server:
 
 - Screen Recording: required for screenshots.
 - Accessibility: required for mouse and keyboard automation.
 - Automation: may be required for AppleScript window activation.
 
 After changing permissions, restart the MCP client or terminal.
+
+On Linux, PyAutoGUI requires access to the active graphical session. Wayland environments may require compositor-specific permissions or XWayland fallback.
+
+On Windows, run the MCP server in the same user session as the apps you want to control. Elevated apps may not accept input from a non-elevated MCP server.
 
 ## Why MCP
 
@@ -185,7 +206,7 @@ MCP is the right outer protocol for this project because Codex and other agent c
 The routing model is:
 
 - Use Codex Computer Use when its supported `SkyComputerUseClient mcp` command is available.
-- Use local macOS and PyAutoGUI controls for desktop fallback and compatibility.
+- Use local OS commands and PyAutoGUI controls for desktop fallback and compatibility.
 - Use ADB for phones and Android emulators.
 
 ## Development
@@ -212,7 +233,7 @@ The implementation is intentionally small:
 
 - `src/server.js` handles MCP JSON-RPC over stdio.
 - `src/tools.js` defines tools, aliases, and routing.
-- `src/backends/desktop.js` implements macOS and PyAutoGUI-backed controls.
+- `src/backends/desktop.js` implements macOS, Linux, Windows, and PyAutoGUI-backed controls.
 - `src/backends/android.js` implements ADB-backed controls.
 - `src/backends/codex.js` detects Codex Computer Use and emits supported config.
 - `scripts/pyautogui_action.py` performs PyAutoGUI actions from Node.

@@ -9,6 +9,28 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PY_ACTION = join(__dirname, '..', '..', 'scripts', 'pyautogui_action.py');
 const RS_TOOL_PATH = '/Users/duckets/Desktop/rs-agent-tools/mcp-launcher.py';
 
+function powershellEscape(value) {
+  return String(value).replace(/'/g, "''");
+}
+
+async function commandExists(command, platform = process.platform) {
+  const checker = platform === 'win32' ? { command: 'where.exe', args: [command] } : { command: 'command', args: ['-v', command] };
+  try {
+    if (checker.command === 'command') await runFile('/bin/sh', ['-lc', `command -v ${command}`], { timeout: 3000 });
+    else await runFile(checker.command, checker.args, { timeout: 3000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function firstAvailable(candidates, platform = process.platform) {
+  for (const candidate of candidates) {
+    if (candidate.command.includes('/') || await commandExists(candidate.command, platform)) return candidate;
+  }
+  return null;
+}
+
 async function runPython(action, args = {}) {
   const payload = JSON.stringify({ action, args });
   const { stdout } = await runFileWithInput('python3', [PY_ACTION], payload, { timeout: 30000 });
@@ -21,10 +43,79 @@ async function runAppleScript(script) {
   return stdout.trim();
 }
 
-export function createDesktopBackend() {
+export function platformClipboardReadCandidates(platform) {
+  if (platform === 'darwin') return [{ command: 'pbpaste', args: [] }];
+  if (platform === 'win32') return [{ command: 'powershell.exe', args: ['-NoProfile', '-Command', 'Get-Clipboard'] }];
+  return [
+    { command: 'wl-paste', args: ['--no-newline'] },
+    { command: 'xclip', args: ['-selection', 'clipboard', '-out'] },
+    { command: 'xsel', args: ['--clipboard', '--output'] },
+  ];
+}
+
+export function platformClipboardWriteCandidates(platform) {
+  if (platform === 'darwin') return [{ command: 'pbcopy', args: [] }];
+  if (platform === 'win32') return [{ command: 'powershell.exe', args: ['-NoProfile', '-Command', '$input | Set-Clipboard'] }];
+  return [
+    { command: 'wl-copy', args: [] },
+    { command: 'xclip', args: ['-selection', 'clipboard'] },
+    { command: 'xsel', args: ['--clipboard', '--input'] },
+  ];
+}
+
+export function platformLaunchCommand(platform, args = {}) {
+  const target = args.url ?? args.path ?? args.app;
+  if (!target) throw new Error('desktop_launch_app requires app, path, or url');
+  if (platform === 'darwin') {
+    if (args.app && !args.path && !args.url) return { command: 'open', args: ['-a', String(args.app)] };
+    return { command: 'open', args: [String(target)] };
+  }
+  if (platform === 'win32') return { command: 'cmd.exe', args: ['/c', 'start', '', String(target)] };
+  return { command: 'xdg-open', args: [String(target)] };
+}
+
+export function platformShellCommand(platform, command) {
+  if (platform === 'win32') return { command: 'powershell.exe', args: ['-NoProfile', '-Command', command] };
+  return { command: '/bin/sh', args: ['-lc', command] };
+}
+
+function platformWindowListCommand(platform) {
+  if (platform === 'win32') {
+    return {
+      command: 'powershell.exe',
+      args: ['-NoProfile', '-Command', 'Get-Process | Where-Object {$_.MainWindowTitle} | Select-Object Id,ProcessName,MainWindowTitle | ConvertTo-Json -Compress'],
+    };
+  }
+  if (platform === 'linux') return { command: 'wmctrl', args: ['-lxp'] };
+  return null;
+}
+
+function platformWindowActivateCommand(platform, args = {}) {
+  if (platform === 'win32') {
+    if (args.pid) {
+      return {
+        command: 'powershell.exe',
+        args: ['-NoProfile', '-Command', `$p = Get-Process -Id ${Number(args.pid)}; Add-Type -Name NativeMethods -Namespace Win32 -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);'; [Win32.NativeMethods]::SetForegroundWindow($p.MainWindowHandle)`],
+      };
+    }
+    if (!args.title) throw new Error('window_activate requires title or pid');
+    return {
+      command: 'powershell.exe',
+      args: ['-NoProfile', '-Command', `$p = Get-Process | Where-Object {$_.MainWindowTitle -like '*${powershellEscape(args.title)}*'} | Select-Object -First 1; Add-Type -Name NativeMethods -Namespace Win32 -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);'; [Win32.NativeMethods]::SetForegroundWindow($p.MainWindowHandle)`],
+    };
+  }
+  if (platform === 'linux') {
+    if (!args.title) throw new Error('window_activate on Linux requires title');
+    return { command: 'wmctrl', args: ['-a', String(args.title)] };
+  }
+  return null;
+}
+
+export function createDesktopBackend(options = {}) {
+  const platform = options.platform ?? process.platform;
   return {
     async status() {
-      const checks = {};
+      const checks = { platform };
       try {
         await runFile('python3', ['--version']);
         checks.python3 = true;
@@ -39,16 +130,24 @@ export function createDesktopBackend() {
         checks.python3 = false;
         checks.pythonError = error.message;
       }
-      if (process.platform === 'darwin') {
-        checks.screencapture = true;
-        checks.pbcopy = true;
-        checks.osascript = true;
+      if (platform === 'darwin') {
+        checks.screencapture = await commandExists('screencapture', platform);
+        checks.pbcopy = await commandExists('pbcopy', platform);
+        checks.pbpaste = await commandExists('pbpaste', platform);
+        checks.osascript = await commandExists('osascript', platform);
+      } else if (platform === 'linux') {
+        checks.xdgOpen = await commandExists('xdg-open', platform);
+        checks.wmctrl = await commandExists('wmctrl', platform);
+        checks.clipboard = Boolean(await firstAvailable(platformClipboardReadCandidates(platform), platform));
+      } else if (platform === 'win32') {
+        checks.powershell = await commandExists('powershell.exe', platform);
+        checks.cmd = await commandExists('cmd.exe', platform);
       }
       return { available: true, detail: checks };
     },
 
     async screenshot(args = {}) {
-      if (process.platform === 'darwin') {
+      if (platform === 'darwin') {
         const commandArgs = ['-x', '-t', 'png'];
         if (args.region) commandArgs.push('-R', args.region.join(','));
         commandArgs.push('-');
@@ -116,40 +215,32 @@ export function createDesktopBackend() {
     },
 
     async clipboardRead() {
-      if (process.platform === 'darwin') {
-        const { stdout } = await runFile('pbpaste', []);
-        return textResult(stdout);
-      }
-      throw new Error('clipboard_read fallback requires macOS pbpaste in this version');
+      const candidate = await firstAvailable(platformClipboardReadCandidates(platform), platform);
+      if (!candidate) throw new Error(`No clipboard read command found for ${platform}`);
+      const { stdout } = await runFile(candidate.command, candidate.args);
+      return textResult(stdout);
     },
 
     async clipboardWrite(args = {}) {
-      if (process.platform === 'darwin') {
-        await runFileWithInput('pbcopy', [], args.text ?? '');
-        return textResult(`Copied ${String(args.text ?? '').length} characters to desktop clipboard`);
-      }
-      throw new Error('clipboard_write fallback requires macOS pbcopy in this version');
+      const candidate = await firstAvailable(platformClipboardWriteCandidates(platform), platform);
+      if (!candidate) throw new Error(`No clipboard write command found for ${platform}`);
+      await runFileWithInput(candidate.command, candidate.args, args.text ?? '');
+      return textResult(`Copied ${String(args.text ?? '').length} characters to desktop clipboard`);
     },
 
     async launchApp(args = {}) {
-      if (process.platform !== 'darwin') throw new Error('desktop_launch_app currently requires macOS');
-      if (args.url) {
-        await runFile('open', [String(args.url)]);
-        return textResult(`Opened URL ${args.url}`);
-      }
-      if (args.path) {
-        await runFile('open', [String(args.path)]);
-        return textResult(`Opened app path ${args.path}`);
-      }
-      if (args.app) {
-        await runFile('open', ['-a', String(args.app)]);
-        return textResult(`Launched app ${args.app}`);
-      }
-      throw new Error('desktop_launch_app requires app, path, or url');
+      const command = platformLaunchCommand(platform, args);
+      await runFile(command.command, command.args);
+      return textResult(`Launched ${args.url ?? args.path ?? args.app}`);
     },
 
     async windowList() {
-      if (process.platform !== 'darwin') throw new Error('window_list currently requires macOS');
+      if (platform !== 'darwin') {
+        const command = platformWindowListCommand(platform);
+        if (!command) throw new Error(`window_list is not supported on ${platform}`);
+        const { stdout } = await runFile(command.command, command.args, { maxBuffer: 1024 * 1024 * 5 });
+        return textResult(stdout);
+      }
       const script = 'tell application "System Events" to get name of every process whose background only is false';
       const output = await runAppleScript(script);
       const apps = output ? output.split(', ').filter(Boolean) : [];
@@ -157,7 +248,12 @@ export function createDesktopBackend() {
     },
 
     async windowActivate(args = {}) {
-      if (process.platform !== 'darwin') throw new Error('window_activate currently requires macOS');
+      if (platform !== 'darwin') {
+        const command = platformWindowActivateCommand(platform, args);
+        if (!command) throw new Error(`window_activate is not supported on ${platform}`);
+        await runFile(command.command, command.args);
+        return textResult(`Activated ${args.pid ?? args.title}`);
+      }
       if (args.pid) {
         await runAppleScript(`tell application "System Events" to set frontmost of first process whose unix id is ${Number(args.pid)} to true`);
         return textResult(`Activated process ${args.pid}`);
@@ -171,8 +267,15 @@ export function createDesktopBackend() {
     async runScript(args = {}) {
       if (!args.path) throw new Error('desktop_run_script requires path');
       if (!existsSync(args.path)) throw new Error(`Script not found: ${args.path}`);
-      const command = String(args.path).endsWith('.py') ? 'python3' : 'bash';
-      const { stdout, stderr } = await runFile(command, [args.path], {
+      const path = String(args.path);
+      const command = path.endsWith('.py')
+        ? { command: 'python3', args: [path] }
+        : platform === 'win32' && path.endsWith('.ps1')
+          ? { command: 'powershell.exe', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path] }
+          : platform === 'win32'
+            ? { command: 'cmd.exe', args: ['/c', path] }
+            : { command: 'bash', args: [path] };
+      const { stdout, stderr } = await runFile(command.command, command.args, {
         timeout: Math.max(1, Number(args.timeout ?? 30)) * 1000,
         maxBuffer: 1024 * 1024 * 5,
       });
@@ -194,7 +297,8 @@ export function createDesktopBackend() {
 
     async terminal(args = {}) {
       if (!args.command) throw new Error('desktop_terminal requires command');
-      const { stdout, stderr } = await runFile('/bin/bash', ['-lc', args.command], {
+      const command = platformShellCommand(platform, args.command);
+      const { stdout, stderr } = await runFile(command.command, command.args, {
         timeout: Math.max(1, Number(args.timeout ?? 30)) * 1000,
         maxBuffer: 1024 * 1024 * 5,
       });
