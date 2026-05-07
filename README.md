@@ -1,109 +1,65 @@
-# Desktop Control — Lobster Edition Skill
+# Newest Desktop Control
 
-A hardened, macOS-friendly desktop automation skill for OpenClaw.
+Consolidated MCP gateway for agent desktop and Android control.
 
-Built to be reliable in real-world macOS use: smooth enough for normal work, strict enough for agent automation, and easy to restore or package for others.
+## What It Combines
 
-## What it does
-- Move the mouse to exact coordinates
-- Click, double-click, right-click, drag, and scroll
-- Type text reliably into the active app
-- Use hotkeys and special keys
-- Capture screenshots and sample pixel colors
-- Search for UI images with confidence + region controls
-- OCR text verification and text search
-- Retry flaky actions with backoff
-- Verify actions after they run
-- Open apps and run AppleScript on macOS
-- List windows and detect the active window
-- Copy/paste via clipboard
-- Save/resume workflow state and task files
-- Annotate screenshots and compare before/after images
-- Run JSON task definitions with checkpoints, actions, and branching
-- Preview and validate tasks before running them
-- Record and replay macros
-- Use policy rules for approval gating
-- Support higher-level AI desktop workflows
-- OpenClaw-native summary and export bundles for agents
-- Vision broker helpers to escalate screenshots to LM Studio or AI Council when needed, including fallback assistance from `safe_type()` / `safe_click_type()` when verification fails
-- Safer wrapper APIs to reduce failures:
-  - `wait_for_focus()`
-  - `safe_type()`
-  - `safe_click_type()`
-  - `safe_hotkey()`
-  - `click_with_retries()`
-  - `type_then_confirm()`
-  - `workflow_guard()`
-- Provide checkpoint, queue, and audit-friendly controls
+- Desktop control from the local `gui-control-lobster`, `computer-use-lobster`, and `computer-use-tool` projects.
+- Codex Computer Use detection through the installed Codex app bundle's supported MCP command.
+- Android phone and emulator control through ADB.
 
-## What’s included
-- `skill/` — the skill source code and docs
-- `requirements.txt` — Python dependencies
-- `TEST_RESULTS.md` — verification notes
-- `IMPORT_NOTES.md` — restore/install instructions
-- `CHANGELOG.md` — what was hardened and fixed
-- `MANIFEST.md` — package contents and verification summary
+The Codex Computer Use binary is proprietary. This project detects and uses supported integration points; it does not decompile, patch, or bypass the Codex app bundle.
 
-## Verified on macOS
-- Screen size detection: working
-- Mouse move/click: working
-- Keyboard typing: working
-- Clipboard: working
-- Screenshot: working (Retina / screencapture fallback)
-- Pixel color sampling: working via screenshot fallback
-- Active window detection: working via AppleScript fallback
-- Window list: working
+## Run
 
-## Install
 ```bash
-pip3 install --break-system-packages -r requirements.txt
+npm test
+npm run status
+npm start
 ```
 
-## Quick test
+## MCP Config
+
+```toml
+[mcp_servers.newest-desktop-control]
+command = "node"
+args = ["/Users/duckets/Desktop/Newest Desktop Control/src/server.js"]
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+```
+
+## Tools
+
+Desktop tools include screenshots, mouse, keyboard, clipboard, screen info, app launch/open, window activation, local script execution, file read/write, terminal commands, and the local RuneScape lookup helper with `desktop_*` names. Compatibility aliases such as `screenshot`, `mouse_click`, `keyboard_type`, `keyboard`, `launch_app`, `terminal`, `file_read`, and `run_script` map to the desktop tools.
+
+The legacy `computer_use_*` aliases from `computer-use-tool` are also preserved: `computer_use_screenshot`, `computer_use_mouse_move`, `computer_use_mouse_click`, `computer_use_mouse_scroll`, `computer_use_keyboard`, `computer_use_cursor_position`, and `computer_use_launch_app`.
+
+Android tools include `android_devices`, `android_screenshot`, `android_screen_size`, `android_current_activity`, `android_tap`, `android_swipe`, `android_text`, `android_key`, `android_launch_app`, `android_ui_dump`, and `android_logcat`.
+
+Diagnostics include `backend_status`, `codex_mcp_config`, and `permissions_check`.
+
+## Why MCP
+
+MCP is the right outer protocol for this project because Codex and other agent clients can consume MCP servers directly, and Codex Computer Use itself is packaged with an MCP server entry in the installed app bundle. This gateway keeps one stable MCP surface while routing to the best available backend:
+
+- Codex Computer Use: expose supported config and status for `SkyComputerUseClient mcp`.
+- Local desktop control: use macOS commands and PyAutoGUI-compatible tools from the three Desktop control projects.
+- Android control: use ADB, which is the supported automation surface for phones and emulators.
+
+The project does not decompile, patch, re-sign, or bypass proprietary Codex binaries. If Codex Computer Use is unavailable because of launch constraints or permissions, the local desktop backend remains available as the fallback.
+
+## Requirements
+
+Desktop control on macOS may require Screen Recording and Accessibility permissions for the terminal or host app running this server. PyAutoGUI actions require Python dependencies:
+
 ```bash
-cd skill
-python3 -c "import sys; sys.path.insert(0, '.'); from __init__ import DesktopController; dc = DesktopController(failsafe=True); print(dc.get_screen_size())"
+python3 -m pip install pyautogui pillow
 ```
 
-## Example usage
-```python
-import sys
-sys.path.insert(0, 'skill')
-from __init__ import DesktopController
+Android control requires ADB:
 
-ctrl = DesktopController(failsafe=True)
-ctrl.move_mouse(500, 300)
-ctrl.click()
-ctrl.type_text('hello from desktop-control', paste=False)
-ctrl.type_text('longer text here', paste=True)
-img = ctrl.screenshot()
-img.save('screen.png')
-print(ctrl.get_pixel_color(10, 10))
+```bash
+adb devices -l
 ```
 
-## Notes
-- Instant mouse moves are the most reliable default on macOS.
-- `type_text(..., paste=True)` is useful for longer or more reliable input.
-- `activate_window()` and `get_active_window()` use macOS AppleScript fallbacks first.
-- `get_pixel_color()` uses screenshot sampling for reliability.
-- The skill is intended for local automation; macOS Accessibility permissions may be required.
-
-## Advanced helpers
-- `find_on_screen_retry()` for confidence-based image search with fallback retries
-- `click_image()` for image-based clicking
-- `wait_for_image()` for UI readiness checks
-- `ocr_text_from_region()`, `find_text_on_screen()`, and `verify_text_present()` for OCR vision helpers
-- `verify_action()` for post-action validation
-- `run_workflow()` for chaining desktop steps
-- `browser_navigate()`, `open_app()`, `run_applescript()`, and `run_command()` for simple browser/terminal/macOS automation
-- `checkpoint()`, `approval_gate()`, `run_queue()`, `capture_evidence()`, and `export_action_log()` for CoWork-style workflows
-- `save_state()`, `load_state()`, `resume_workflow()`, `save_task()`, `load_task()`, `run_task()`, `preview_task()`, `validate_task()`, `workflow_report()`, `openclaw_summary()`, `export_openclaw_bundle()`, `set_resource_broker()`, `vision_assist()`, `start_macro_recording()`, `stop_macro_recording()`, `save_macro()`, `load_macro()`, `replay_macro()`, `set_policy()`, `should_require_approval()`, `annotate_screenshot()`, `compare_screenshots()`, `diff_report()`, `get_monitor_info()` / `select_monitor()`, and safety wrappers (`wait_for_focus()`, `safe_type()`, `safe_click_type()`, `safe_hotkey()`, `click_with_retries()`, `type_then_confirm()`, `workflow_guard()`) for durable workflows
-
-## Credits
-- **Original skill source:** ClawHub `matagul/desktop-control` (https://clawhub.ai/matagul/desktop-control)
-- **Original concept and base implementation:** ClawHub skill by matagul
-- **This edition:** Hardened, macOS-tested, and packaged for OpenClaw use
-
-## Links
-- GitHub repo: https://github.com/Franzferdinan51/desktop-control-lobster-edition-skill
-- Desktop backup folder: `/Users/duckets/Desktop/desktop-control-backup`
+Enable Developer Options and USB debugging on phones, or start an Android emulator.
