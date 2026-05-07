@@ -1,16 +1,24 @@
 # Newest Desktop Control
 
-Consolidated MCP gateway for agent desktop and Android control.
+One MCP server for agent control across macOS desktop apps, Codex Computer Use, and Android devices.
 
-## What It Combines
+This repo replaces the older `desktop-control-lobster-edition-skill` Python skill layout with a consolidated Node.js MCP gateway. It merges the useful desktop-control surface from `gui-control-lobster`, `computer-use-lobster`, and `computer-use-tool`, then adds Android ADB controls and Codex Computer Use detection.
 
-- Desktop control from the local `gui-control-lobster`, `computer-use-lobster`, and `computer-use-tool` projects.
-- Codex Computer Use detection through the installed Codex app bundle's supported MCP command.
-- Android phone and emulator control through ADB.
+## What This Gives Agents
 
-The Codex Computer Use binary is proprietary. This project detects and uses supported integration points; it does not decompile, patch, or bypass the Codex app bundle.
+- Desktop screenshots, mouse, keyboard, clipboard, screen, pixel, app launch, and window activation tools.
+- Compatibility aliases for the older `screenshot`, `mouse_click`, `keyboard`, and `computer_use_*` tool names.
+- Android phone and emulator control through ADB: screenshots, taps, swipes, text input, key events, app launch, UI dump, logcat, screen size, and focused activity.
+- Codex Computer Use discovery and ready-to-use MCP config generation for the supported `SkyComputerUseClient mcp` entry point.
+- Diagnostics for dependencies, permissions, and backend availability.
 
-## Run
+## Important Boundary
+
+Codex Computer Use is proprietary. This project does not decompile, patch, re-sign, copy, or bypass the Codex app bundle. It detects supported integration points and exposes fallback desktop controls through macOS utilities and PyAutoGUI.
+
+The desktop, terminal, file-write, and Android tools are powerful. Only expose this MCP server to agents and clients you trust.
+
+## Quick Start
 
 ```bash
 npm test
@@ -18,7 +26,43 @@ npm run status
 npm start
 ```
 
-## MCP Config
+The server speaks JSON-RPC over stdio, as expected by Codex and other MCP clients.
+
+## Requirements
+
+- Node.js 18 or newer.
+- macOS for the full desktop backend.
+- Python 3 with PyAutoGUI and Pillow for mouse, keyboard, pixel, and fallback screenshot actions.
+- ADB for Android controls.
+- Codex.app installed if you want Codex Computer Use detection.
+
+Install the Python dependencies:
+
+```bash
+python3 -m pip install pyautogui pillow
+```
+
+Check Android availability:
+
+```bash
+adb devices -l
+```
+
+For physical Android phones, enable Developer Options and USB debugging. For emulators, start the emulator before calling Android tools.
+
+## Codex MCP Config
+
+Add this to your Codex config, adjusting the path if you clone the repo somewhere else:
+
+```toml
+[mcp_servers.newest-desktop-control]
+command = "node"
+args = ["/absolute/path/to/desktop-control-lobster-edition-skill/src/server.js"]
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+```
+
+From this repo on the original machine, the path was:
 
 ```toml
 [mcp_servers.newest-desktop-control]
@@ -28,38 +72,158 @@ startup_timeout_sec = 20
 tool_timeout_sec = 60
 ```
 
-## Tools
+You can also ask the server for the detected Codex Computer Use MCP config:
 
-Desktop tools include screenshots, mouse, keyboard, clipboard, screen info, app launch/open, window activation, local script execution, file read/write, terminal commands, and the local RuneScape lookup helper with `desktop_*` names. Compatibility aliases such as `screenshot`, `mouse_click`, `keyboard_type`, `keyboard`, `launch_app`, `terminal`, `file_read`, and `run_script` map to the desktop tools.
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "codex_mcp_config",
+    "arguments": {}
+  }
+}
+```
 
-The legacy `computer_use_*` aliases from `computer-use-tool` are also preserved: `computer_use_screenshot`, `computer_use_mouse_move`, `computer_use_mouse_click`, `computer_use_mouse_scroll`, `computer_use_keyboard`, `computer_use_cursor_position`, and `computer_use_launch_app`.
+## Tool Groups
 
-Android tools include `android_devices`, `android_screenshot`, `android_screen_size`, `android_current_activity`, `android_tap`, `android_swipe`, `android_text`, `android_key`, `android_launch_app`, `android_ui_dump`, and `android_logcat`.
+Canonical tools are namespaced by backend. Compatibility aliases are kept so older agents do not have to change prompts immediately.
 
-Diagnostics include `backend_status`, `codex_mcp_config`, and `permissions_check`.
+### Desktop
+
+- `desktop_screenshot`
+- `desktop_mouse_move`
+- `desktop_mouse_click`
+- `desktop_mouse_scroll`
+- `desktop_keyboard_type`
+- `desktop_keyboard_press`
+- `desktop_keyboard_hotkey`
+- `desktop_keyboard`
+- `desktop_cursor_position`
+- `desktop_get_screen_size`
+- `desktop_get_pixel_color`
+- `desktop_clipboard_read`
+- `desktop_clipboard_write`
+- `desktop_launch_app`
+- `desktop_window_list`
+- `desktop_window_activate`
+- `desktop_run_script`
+- `desktop_file_read`
+- `desktop_file_write`
+- `desktop_terminal`
+- `desktop_rs_lookup`
+
+### Desktop Compatibility Aliases
+
+- `screenshot`
+- `mouse_move`
+- `mouse_click`
+- `mouse_scroll`
+- `keyboard_type`
+- `keyboard_press`
+- `keyboard_hotkey`
+- `keyboard`
+- `cursor_position`
+- `get_screen_size`
+- `get_pixel_color`
+- `clipboard_read`
+- `clipboard_write`
+- `launch_app`
+- `window_list`
+- `window_activate`
+- `run_script`
+- `file_read`
+- `file_write`
+- `terminal`
+- `rs_lookup`
+
+### Computer Use Compatibility Aliases
+
+- `computer_use_screenshot`
+- `computer_use_mouse_move`
+- `computer_use_mouse_click`
+- `computer_use_mouse_scroll`
+- `computer_use_keyboard`
+- `computer_use_cursor_position`
+- `computer_use_launch_app`
+
+### Android
+
+- `android_devices`
+- `android_screenshot`
+- `android_screen_size`
+- `android_current_activity`
+- `android_tap`
+- `android_swipe`
+- `android_text`
+- `android_key`
+- `android_launch_app`
+- `android_ui_dump`
+- `android_logcat`
+
+### Diagnostics
+
+- `backend_status`
+- `codex_mcp_config`
+- `permissions_check`
+
+## macOS Permissions
+
+macOS may block screenshots and input automation until the host process has permission.
+
+Grant permissions to the app or terminal that launches this MCP server:
+
+- Screen Recording: required for screenshots.
+- Accessibility: required for mouse and keyboard automation.
+- Automation: may be required for AppleScript window activation.
+
+After changing permissions, restart the MCP client or terminal.
 
 ## Why MCP
 
-MCP is the right outer protocol for this project because Codex and other agent clients can consume MCP servers directly, and Codex Computer Use itself is packaged with an MCP server entry in the installed app bundle. This gateway keeps one stable MCP surface while routing to the best available backend:
+MCP is the right outer protocol for this project because Codex and other agent clients can load MCP servers directly. The current Codex app also packages Computer Use as an MCP server entry, so this gateway follows the supported shape instead of trying to reverse engineer private internals.
 
-- Codex Computer Use: expose supported config and status for `SkyComputerUseClient mcp`.
-- Local desktop control: use macOS commands and PyAutoGUI-compatible tools from the three Desktop control projects.
-- Android control: use ADB, which is the supported automation surface for phones and emulators.
+The routing model is:
 
-The project does not decompile, patch, re-sign, or bypass proprietary Codex binaries. If Codex Computer Use is unavailable because of launch constraints or permissions, the local desktop backend remains available as the fallback.
+- Use Codex Computer Use when its supported `SkyComputerUseClient mcp` command is available.
+- Use local macOS and PyAutoGUI controls for desktop fallback and compatibility.
+- Use ADB for phones and Android emulators.
 
-## Requirements
+## Development
 
-Desktop control on macOS may require Screen Recording and Accessibility permissions for the terminal or host app running this server. PyAutoGUI actions require Python dependencies:
-
-```bash
-python3 -m pip install pyautogui pillow
-```
-
-Android control requires ADB:
+Run the test suite:
 
 ```bash
-adb devices -l
+npm test
 ```
 
-Enable Developer Options and USB debugging on phones, or start an Android emulator.
+Check backend availability:
+
+```bash
+npm run status
+```
+
+Start the MCP server:
+
+```bash
+npm start
+```
+
+The implementation is intentionally small:
+
+- `src/server.js` handles MCP JSON-RPC over stdio.
+- `src/tools.js` defines tools, aliases, and routing.
+- `src/backends/desktop.js` implements macOS and PyAutoGUI-backed controls.
+- `src/backends/android.js` implements ADB-backed controls.
+- `src/backends/codex.js` detects Codex Computer Use and emits supported config.
+- `scripts/pyautogui_action.py` performs PyAutoGUI actions from Node.
+
+## Status
+
+Validated locally with:
+
+```bash
+npm test
+npm run status
+```
+
+The test suite covers MCP initialization compatibility, tool registration, alias routing, Android command construction, Android parsers, and Codex config generation.
