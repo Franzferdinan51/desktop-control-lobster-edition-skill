@@ -39,7 +39,7 @@ The server speaks JSON-RPC over stdio, as expected by Codex and other MCP client
 Install the Python dependencies:
 
 ```bash
-python3 -m pip install pyautogui pillow
+python3 -m pip install pyautogui pillow  # On Windows, use 'python' instead of 'python3'
 ```
 
 Check Android availability:

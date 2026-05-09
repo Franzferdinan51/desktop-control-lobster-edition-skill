@@ -9,6 +9,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PY_ACTION = join(__dirname, '..', '..', 'scripts', 'pyautogui_action.py');
 const RS_TOOL_PATH = '/Users/duckets/Desktop/rs-agent-tools/mcp-launcher.py';
 
+// Cross-platform Python command: Windows uses 'python', macOS/Linux uses 'python3'
+function pythonCmd(platform = process.platform) {
+  return platform === 'win32' ? 'python' : 'python3';
+}
+
 function powershellEscape(value) {
   return String(value).replace(/'/g, "''");
 }
@@ -33,7 +38,7 @@ async function firstAvailable(candidates, platform = process.platform) {
 
 async function runPython(action, args = {}) {
   const payload = JSON.stringify({ action, args });
-  const { stdout } = await runFileWithInput('python3', [PY_ACTION], payload, { timeout: 30000 });
+  const { stdout } = await runFileWithInput(pythonCmd(), [PY_ACTION], payload, { timeout: 30000 });
   const text = stdout.toString('utf8').trim();
   return text ? JSON.parse(text) : {};
 }
@@ -117,10 +122,10 @@ export function createDesktopBackend(options = {}) {
     async status() {
       const checks = { platform };
       try {
-        await runFile('python3', ['--version']);
+        await runFile(pythonCmd(), ['--version']);
         checks.python3 = true;
         try {
-          await runFile('python3', ['-c', 'import pyautogui, PIL']);
+          await runFile(pythonCmd(), ['-c', 'import pyautogui, PIL']);
           checks.pyautogui = true;
         } catch (error) {
           checks.pyautogui = false;
@@ -269,7 +274,7 @@ export function createDesktopBackend(options = {}) {
       if (!existsSync(args.path)) throw new Error(`Script not found: ${args.path}`);
       const path = String(args.path);
       const command = path.endsWith('.py')
-        ? { command: 'python3', args: [path] }
+        ? { command: pythonCmd(), args: [path] }
         : platform === 'win32' && path.endsWith('.ps1')
           ? { command: 'powershell.exe', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path] }
           : platform === 'win32'
@@ -309,7 +314,7 @@ export function createDesktopBackend(options = {}) {
       if (!existsSync(RS_TOOL_PATH)) throw new Error(`RS lookup helper not found: ${RS_TOOL_PATH}`);
       const lookupArgs = args.player ? ['player', args.player] : args.clan ? ['clan', args.clan] : null;
       if (!lookupArgs) throw new Error('desktop_rs_lookup requires player or clan');
-      const { stdout, stderr } = await runFile('python3', [RS_TOOL_PATH, ...lookupArgs], {
+      const { stdout, stderr } = await runFile(pythonCmd(), [RS_TOOL_PATH, ...lookupArgs], {
         timeout: 15000,
         maxBuffer: 1024 * 1024 * 3,
       });
