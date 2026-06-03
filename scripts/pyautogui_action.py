@@ -72,6 +72,23 @@ def main():
         print(json.dumps({"r": r, "g": g, "b": b}))
         return
 
+    if action == "mouse_drag":
+        pyautogui.dragTo(args["x"], args["y"], duration=args.get("duration", 0.5), button=args.get("button", "left"))
+        print(json.dumps({"ok": True}))
+        return
+
+    if action == "ocr":
+        try:
+            import pytesseract
+            from PIL import Image
+            region = args.get("region")
+            image = pyautogui.screenshot(region=tuple(region) if region else None)
+            text = pytesseract.image_to_string(image)
+            print(json.dumps({"text": text.strip()}))
+        except Exception as e:
+            print(json.dumps({"error": str(e), "text": ""}))
+        return
+
     raise SystemExit(f"unknown action: {action}")
 
 

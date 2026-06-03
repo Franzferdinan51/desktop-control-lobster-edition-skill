@@ -111,6 +111,8 @@ Canonical tools are namespaced by backend. Compatibility aliases are kept so old
 - `desktop_mouse_move`
 - `desktop_mouse_click`
 - `desktop_mouse_scroll`
+- `desktop_mouse_drag`
+- `desktop_ocr`
 - `desktop_keyboard_type`
 - `desktop_keyboard_press`
 - `desktop_keyboard_hotkey`

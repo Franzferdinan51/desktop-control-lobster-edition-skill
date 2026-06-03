@@ -182,6 +182,19 @@ export function createDesktopBackend(options = {}) {
       return textResult(`Scrolled desktop by ${amount}`);
     },
 
+    async mouseDrag(args = {}) {
+      await runPython('mouse_drag', args);
+      return textResult(`Dragged mouse to (${args.x}, ${args.y})`);
+    },
+
+    async ocr(args = {}) {
+      const result = await runPython('ocr', args);
+      if (result.error) {
+        return textResult(`OCR error: ${result.error}`);
+      }
+      return textResult(result.text || '');
+    },
+
     async keyboardType(args = {}) {
       await runPython('keyboard_type', args);
       return textResult(`Typed ${String(args.text ?? '').length} characters on desktop`);
