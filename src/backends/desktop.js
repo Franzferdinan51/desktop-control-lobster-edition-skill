@@ -192,7 +192,65 @@ export function createDesktopBackend(options = {}) {
       if (result.error) {
         return textResult(`OCR error: ${result.error}`);
       }
-      return textResult(result.text || '');
+      return jsonResult({ text: result.text || '', error: result.error });
+    },
+
+    async mouseDoubleClick(args = {}) {
+      await runPython('mouse_double_click', args);
+      return textResult('Double-clicked desktop mouse');
+    },
+
+    async keyDown(args = {}) {
+      await runPython('key_down', args);
+      return textResult(`Key down: ${args.key}`);
+    },
+
+    async keyUp(args = {}) {
+      await runPython('key_up', args);
+      return textResult(`Key up: ${args.key}`);
+    },
+
+    async getActiveWindow() {
+      return jsonResult(await runPython('get_active_window'));
+    },
+
+    async findImage(args = {}) {
+      const result = await runPython('find_image', args);
+      return jsonResult(result);
+    },
+
+    async scrollDirection(args = {}) {
+      await runPython('scroll_direction', args);
+      return textResult(`Scrolled ${args.direction || 'down'}`);
+    },
+
+    async mouseDoubleClick(args = {}) {
+      await runPython('mouse_double_click', args);
+      return textResult('Double-clicked desktop mouse');
+    },
+
+    async keyDown(args = {}) {
+      await runPython('key_down', args);
+      return textResult(`Key down: ${args.key}`);
+    },
+
+    async keyUp(args = {}) {
+      await runPython('key_up', args);
+      return textResult(`Key up: ${args.key}`);
+    },
+
+    async getActiveWindow() {
+      return jsonResult(await runPython('get_active_window'));
+    },
+
+    async findImage(args = {}) {
+      const result = await runPython('find_image', args);
+      return jsonResult(result);
+    },
+
+    async scrollDirection(args = {}) {
+      await runPython('scroll_direction', args);
+      return textResult(`Scrolled ${args.direction || 'down'}`);
     },
 
     async keyboardType(args = {}) {

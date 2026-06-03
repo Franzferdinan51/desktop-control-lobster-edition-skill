@@ -82,11 +82,82 @@ def main():
             import pytesseract
             from PIL import Image
             region = args.get("region")
+            lang = args.get("language", "eng")
             image = pyautogui.screenshot(region=tuple(region) if region else None)
-            text = pytesseract.image_to_string(image)
+            text = pytesseract.image_to_string(image, lang=lang)
             print(json.dumps({"text": text.strip()}))
         except Exception as e:
             print(json.dumps({"error": str(e), "text": ""}))
+        return
+
+    if action == "mouse_double_click":
+        if "x" in args and "y" in args:
+            pyautogui.doubleClick(args["x"], args["y"], button=args.get("button", "left"))
+        else:
+            pyautogui.doubleClick(button=args.get("button", "left"))
+        print(json.dumps({"ok": True}))
+        return
+
+    if action == "key_down":
+        pyautogui.keyDown(args["key"])
+        print(json.dumps({"ok": True}))
+        return
+
+    if action == "key_up":
+        pyautogui.keyUp(args["key"])
+        print(json.dumps({"ok": True}))
+        return
+
+    if action == "get_active_window":
+        try:
+            import pygetwindow as gw
+            win = gw.getActiveWindow()
+            if win:
+                print(json.dumps({"title": win.title, "left": win.left, "top": win.top, "width": win.width, "height": win.height}))
+            else:
+                print(json.dumps({"title": None}))
+        except Exception:
+            # Fallback: no pygetwindow
+            print(json.dumps({"title": None, "note": "pygetwindow not installed"}))
+        return
+
+    if action == "find_image":
+        try:
+            image_path = args.get("image_path")
+            if not image_path:
+                print(json.dumps({"error": "image_path required"}))
+                return
+            confidence = float(args.get("confidence", 0.9))
+            location = pyautogui.locateOnScreen(image_path, confidence=confidence)
+            if location:
+                center = pyautogui.center(location)
+                print(json.dumps({
+                    "found": True,
+                    "x": center.x,
+                    "y": center.y,
+                    "left": location.left,
+                    "top": location.top,
+                    "width": location.width,
+                    "height": location.height
+                }))
+            else:
+                print(json.dumps({"found": False}))
+        except Exception as e:
+            print(json.dumps({"error": str(e), "found": False}))
+        return
+
+    if action == "scroll_direction":
+        direction = args.get("direction", "down")
+        amount = args.get("amount", 3)
+        if direction == "up":
+            pyautogui.scroll(amount)
+        elif direction == "down":
+            pyautogui.scroll(-amount)
+        elif direction == "left":
+            pyautogui.hscroll(-amount)
+        elif direction == "right":
+            pyautogui.hscroll(amount)
+        print(json.dumps({"ok": True}))
         return
 
     raise SystemExit(f"unknown action: {action}")
