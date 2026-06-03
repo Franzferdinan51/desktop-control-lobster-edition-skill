@@ -160,6 +160,160 @@ def main():
         print(json.dumps({"ok": True}))
         return
 
+    if action == "wait":
+        import time
+        time.sleep(float(args.get("seconds", 1)))
+        print(json.dumps({"ok": True}))
+        return
+
+    if action == "get_all_windows":
+        try:
+            import pygetwindow as gw
+            windows = []
+            for win in gw.getAllWindows():
+                if win.title:
+                    windows.append({
+                        "title": win.title,
+                        "left": win.left,
+                        "top": win.top,
+                        "width": win.width,
+                        "height": win.height,
+                        "isActive": win.isActive,
+                        "isMinimized": win.isMinimized,
+                        "isMaximized": win.isMaximized
+                    })
+            print(json.dumps({"windows": windows}))
+        except Exception as e:
+            print(json.dumps({"error": str(e), "windows": []}))
+        return
+
+    if action == "minimize_window":
+        try:
+            import pygetwindow as gw
+            title = args.get("title")
+            if title:
+                wins = gw.getWindowsWithTitle(title)
+                if wins:
+                    wins[0].minimize()
+            print(json.dumps({"ok": True}))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+        return
+
+    if action == "maximize_window":
+        try:
+            import pygetwindow as gw
+            title = args.get("title")
+            if title:
+                wins = gw.getWindowsWithTitle(title)
+                if wins:
+                    wins[0].maximize()
+            print(json.dumps({"ok": True}))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+        return
+
+    if action == "restore_window":
+        try:
+            import pygetwindow as gw
+            title = args.get("title")
+            if title:
+                wins = gw.getWindowsWithTitle(title)
+                if wins:
+                    wins[0].restore()
+            print(json.dumps({"ok": True}))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+        return
+
+    if action == "close_window":
+        try:
+            import pygetwindow as gw
+            title = args.get("title")
+            if title:
+                wins = gw.getWindowsWithTitle(title)
+                if wins:
+                    wins[0].close()
+            print(json.dumps({"ok": True}))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+        return
+
+    if action == "move_window":
+        try:
+            import pygetwindow as gw
+            title = args.get("title")
+            x = args.get("x", 0)
+            y = args.get("y", 0)
+            if title:
+                wins = gw.getWindowsWithTitle(title)
+                if wins:
+                    wins[0].moveTo(x, y)
+            print(json.dumps({"ok": True}))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+        return
+
+    if action == "resize_window":
+        try:
+            import pygetwindow as gw
+            title = args.get("title")
+            width = args.get("width", 800)
+            height = args.get("height", 600)
+            if title:
+                wins = gw.getWindowsWithTitle(title)
+                if wins:
+                    wins[0].resizeTo(width, height)
+            print(json.dumps({"ok": True}))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+        return
+
+    if action == "get_monitors":
+        try:
+            import screeninfo
+            monitors = []
+            for m in screeninfo.get_monitors():
+                monitors.append({
+                    "x": m.x,
+                    "y": m.y,
+                    "width": m.width,
+                    "height": m.height,
+                    "is_primary": m.is_primary
+                })
+            print(json.dumps({"monitors": monitors}))
+        except Exception:
+            # Fallback to single screen
+            size = pyautogui.size()
+            print(json.dumps({"monitors": [{"x": 0, "y": 0, "width": size.width, "height": size.height, "is_primary": True}]}))
+        return
+
+    if action == "list_processes":
+        try:
+            import psutil
+            procs = []
+            for p in psutil.process_iter(['pid', 'name', 'exe']):
+                try:
+                    procs.append(p.info)
+                except:
+                    pass
+            print(json.dumps({"processes": procs[:50]}))  # limit
+        except Exception as e:
+            print(json.dumps({"error": str(e), "processes": []}))
+        return
+
+    if action == "kill_process":
+        try:
+            import psutil
+            pid = args.get("pid")
+            if pid:
+                p = psutil.Process(int(pid))
+                p.terminate()
+            print(json.dumps({"ok": True}))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+        return
+
     raise SystemExit(f"unknown action: {action}")
 
 
