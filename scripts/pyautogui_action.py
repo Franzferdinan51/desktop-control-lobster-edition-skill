@@ -98,6 +98,110 @@ def main():
         print(json.dumps({"ok": True}))
         return
 
+    if action == "mouse_hover":
+        pyautogui.moveTo(args["x"], args["y"], duration=args.get("duration", 0))
+        print(json.dumps({"ok": True}))
+        return
+
+    if action == "right_click":
+        if "x" in args and "y" in args:
+            pyautogui.rightClick(args["x"], args["y"])
+        else:
+            pyautogui.rightClick()
+        print(json.dumps({"ok": True}))
+        return
+
+    if action == "focus_window":
+        try:
+            import pygetwindow as gw
+            title = args.get("title")
+            if title:
+                wins = gw.getWindowsWithTitle(title)
+                if wins:
+                    wins[0].activate()
+                    wins[0].restore()  # bring to front
+            print(json.dumps({"ok": True}))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+        return
+
+    if action == "middle_click":
+        if "x" in args and "y" in args:
+            pyautogui.middleClick(args["x"], args["y"])
+        else:
+            pyautogui.middleClick()
+        print(json.dumps({"ok": True}))
+        return
+
+    if action == "wait_for_image":
+        try:
+            image_path = args.get("image_path")
+            timeout = float(args.get("timeout", 10))
+            confidence = float(args.get("confidence", 0.9))
+            start = time.time() if 'time' in dir() else 0
+            import time
+            while time.time() - start < timeout:
+                try:
+                    loc = pyautogui.locateOnScreen(image_path, confidence=confidence)
+                    if loc:
+                        center = pyautogui.center(loc)
+                        print(json.dumps({"found": True, "x": center.x, "y": center.y}))
+                        return
+                except:
+                    pass
+                time.sleep(0.5)
+            print(json.dumps({"found": False}))
+        except Exception as e:
+            print(json.dumps({"error": str(e), "found": False}))
+        return
+
+    if action == "screenshot_window":
+        try:
+            import pygetwindow as gw
+            title = args.get("title")
+            if title:
+                wins = gw.getWindowsWithTitle(title)
+                if wins:
+                    win = wins[0]
+                    # Bring to front briefly for capture
+                    win.activate()
+                    time.sleep(0.3)
+                    region = (win.left, win.top, win.width, win.height)
+                    image = pyautogui.screenshot(region=region)
+                    output = io.BytesIO()
+                    image.save(output, format="PNG")
+                    print(json.dumps({"image": base64.b64encode(output.getvalue()).decode("ascii"), "region": list(region)}))
+                    return
+            print(json.dumps({"error": "window not found"}))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+        return
+
+    if action == "get_window_info":
+        try:
+            import pygetwindow as gw
+            title = args.get("title")
+            if title:
+                wins = gw.getWindowsWithTitle(title)
+                if wins:
+                    win = wins[0]
+                    print(json.dumps({
+                        "found": True,
+                        "title": win.title,
+                        "left": win.left,
+                        "top": win.top,
+                        "width": win.width,
+                        "height": win.height,
+                        "isActive": win.isActive,
+                        "isMinimized": win.isMinimized,
+                        "isMaximized": win.isMaximized
+                    }))
+                    return
+            print(json.dumps({"found": False}))
+        except Exception as e:
+            print(json.dumps({"error": str(e), "found": False}))
+        return
+
     if action == "key_down":
         pyautogui.keyDown(args["key"])
         print(json.dumps({"ok": True}))
