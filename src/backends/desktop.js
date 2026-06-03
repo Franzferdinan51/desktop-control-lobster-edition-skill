@@ -182,6 +182,101 @@ export function createDesktopBackend(options = {}) {
       return textResult(`Scrolled desktop by ${amount}`);
     },
 
+    async mouseDrag(args = {}) {
+      await runPython('mouse_drag', args);
+      return textResult(`Dragged mouse to (${args.x}, ${args.y})`);
+    },
+
+    async ocr(args = {}) {
+      const result = await runPython('ocr', args);
+      if (result.error) {
+        return textResult(`OCR error: ${result.error}`);
+      }
+      return jsonResult({ text: result.text || '', error: result.error });
+    },
+
+    async mouseDoubleClick(args = {}) {
+      await runPython('mouse_double_click', args);
+      return textResult('Double-clicked desktop mouse');
+    },
+
+    async keyDown(args = {}) {
+      await runPython('key_down', args);
+      return textResult(`Key down: ${args.key}`);
+    },
+
+    async keyUp(args = {}) {
+      await runPython('key_up', args);
+      return textResult(`Key up: ${args.key}`);
+    },
+
+    async getActiveWindow() {
+      return jsonResult(await runPython('get_active_window'));
+    },
+
+    async findImage(args = {}) {
+      const result = await runPython('find_image', args);
+      return jsonResult(result);
+    },
+
+    async scrollDirection(args = {}) {
+      await runPython('scroll_direction', args);
+      return textResult(`Scrolled ${args.direction || 'down'}`);
+    },
+
+    async mouseDoubleClick(args = {}) {
+      await runPython('mouse_double_click', args);
+      return textResult('Double-clicked desktop mouse');
+    },
+
+    async keyDown(args = {}) {
+      await runPython('key_down', args);
+      return textResult(`Key down: ${args.key}`);
+    },
+
+    async keyUp(args = {}) {
+      await runPython('key_up', args);
+      return textResult(`Key up: ${args.key}`);
+    },
+
+    async getActiveWindow() {
+      return jsonResult(await runPython('get_active_window'));
+    },
+
+    async findImage(args = {}) {
+      const result = await runPython('find_image', args);
+      return jsonResult(result);
+    },
+
+    async wait(args = {}) {
+      await runPython('wait', args);
+      return textResult(`Waited ${args.seconds || 1} seconds`);
+    },
+
+    async getAllWindows() {
+      return jsonResult(await runPython('get_all_windows'));
+    },
+
+    async minimizeWindow(args = {}) {
+      await runPython('minimize_window', args);
+      return textResult(`Minimized window: ${args.title || 'active'}`);
+    },
+
+    async maximizeWindow(args = {}) {
+      await runPython('maximize_window', args);
+      return textResult(`Maximized window: ${args.title || 'active'}`);
+    },
+
+    async restoreWindow(args = {}) {
+      await runPython('restore_window', args);
+      return textResult(`Restored window: ${args.title || 'active'}`);
+    },
+
+    async closeWindow(args = {}) {
+      await runPython('close_window', args);
+      return textResult(`Closed window: ${args.title || 'active'}`);
+    },
+
     async keyboardType(args = {}) {
       await runPython('keyboard_type', args);
       return textResult(`Typed ${String(args.text ?? '').length} characters on desktop`);
