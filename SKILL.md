@@ -13,8 +13,13 @@ metadata:
     mcp:
       command: node
       args:
-        - "C:\\Users\\franz\\.openclaw\\workspace\\skills\\desktop-control-lobster\\src\\server.js"
+        - "{SKILL_DIR}/src/server.js"
       transport: stdio
+      install_hint: |
+        After installing the skill, update your OpenClaw MCP config with the correct server path for your platform:
+        - macOS/Linux: ~/.openclaw/skills/desktop-control-lobster/src/server.js
+        - Windows: %USERPROFILE%\.openclaw\skills\desktop-control-lobster\src\server.js
+        Or use the provided scripts/mcp-wrapper.sh (macOS/Linux) or scripts/mcp-wrapper.bat (Windows).
 ---
 
 # Desktop Control (Lobster Edition)

@@ -273,19 +273,26 @@ def main():
     if action == "get_all_windows":
         try:
             import pygetwindow as gw
+            import platform
             windows = []
-            for win in gw.getAllWindows():
-                if win.title:
-                    windows.append({
-                        "title": win.title,
-                        "left": win.left,
-                        "top": win.top,
-                        "width": win.width,
-                        "height": win.height,
-                        "isActive": win.isActive,
-                        "isMinimized": win.isMinimized,
-                        "isMaximized": win.isMaximized
-                    })
+            if platform.system() == 'Darwin':
+                # pygetwindow on macOS has no getAllWindows; surface titles via getAllTitles
+                for title in gw.getAllTitles():
+                    if title:
+                        windows.append({"title": title, "left": None, "top": None, "width": None, "height": None, "isActive": False, "isMinimized": False, "isMaximized": False})
+            else:
+                for win in gw.getAllWindows():
+                    if win.title:
+                        windows.append({
+                            "title": win.title,
+                            "left": win.left,
+                            "top": win.top,
+                            "width": win.width,
+                            "height": win.height,
+                            "isActive": win.isActive,
+                            "isMinimized": win.isMinimized,
+                            "isMaximized": win.isMaximized
+                        })
             print(json.dumps({"windows": windows}))
         except Exception as e:
             print(json.dumps({"error": str(e), "windows": []}))

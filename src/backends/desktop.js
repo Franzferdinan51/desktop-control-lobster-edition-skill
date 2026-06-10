@@ -187,14 +187,6 @@ export function createDesktopBackend(options = {}) {
       return textResult(`Dragged mouse to (${args.x}, ${args.y})`);
     },
 
-    async ocr(args = {}) {
-      const result = await runPython('ocr', args);
-      if (result.error) {
-        return textResult(`OCR error: ${result.error}`);
-      }
-      return jsonResult({ text: result.text || '', error: result.error });
-    },
-
     async mouseDoubleClick(args = {}) {
       await runPython('mouse_double_click', args);
       return textResult('Double-clicked desktop mouse');
@@ -224,28 +216,12 @@ export function createDesktopBackend(options = {}) {
       return textResult(`Scrolled ${args.direction || 'down'}`);
     },
 
-    async mouseDoubleClick(args = {}) {
-      await runPython('mouse_double_click', args);
-      return textResult('Double-clicked desktop mouse');
-    },
-
-    async keyDown(args = {}) {
-      await runPython('key_down', args);
-      return textResult(`Key down: ${args.key}`);
-    },
-
-    async keyUp(args = {}) {
-      await runPython('key_up', args);
-      return textResult(`Key up: ${args.key}`);
-    },
-
-    async getActiveWindow() {
-      return jsonResult(await runPython('get_active_window'));
-    },
-
-    async findImage(args = {}) {
-      const result = await runPython('find_image', args);
-      return jsonResult(result);
+    async ocr(args = {}) {
+      const result = await runPython('ocr', args);
+      if (result.error) {
+        return textResult(`OCR error: ${result.error}`);
+      }
+      return jsonResult({ text: result.text || '', error: result.error });
     },
 
     async wait(args = {}) {
@@ -275,6 +251,29 @@ export function createDesktopBackend(options = {}) {
     async closeWindow(args = {}) {
       await runPython('close_window', args);
       return textResult(`Closed window: ${args.title || 'active'}`);
+    },
+
+    async moveWindow(args = {}) {
+      await runPython('move_window', args);
+      return textResult(`Moved window: ${args.title || 'active'} to (${args.x}, ${args.y})`);
+    },
+
+    async resizeWindow(args = {}) {
+      await runPython('resize_window', args);
+      return textResult(`Resized window: ${args.title || 'active'} to ${args.width}x${args.height}`);
+    },
+
+    async getMonitors() {
+      return jsonResult(await runPython('get_monitors'));
+    },
+
+    async listProcesses() {
+      return jsonResult(await runPython('list_processes'));
+    },
+
+    async killProcess(args = {}) {
+      await runPython('kill_process', args);
+      return textResult(`Killed process ${args.pid}`);
     },
 
     async keyboardType(args = {}) {
