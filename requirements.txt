@@ -1,0 +1,6 @@
+pyautogui
+Pillow
+pygetwindow
+pytesseract
+screeninfo
+psutil

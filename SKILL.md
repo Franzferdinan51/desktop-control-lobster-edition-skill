@@ -5,7 +5,7 @@ metadata:
   openclaw:
     requires:
       bins: ["node"]
-      python: ["pyautogui", "pillow"]
+      python: ["pyautogui", "pillow", "pygetwindow", "pytesseract", "screeninfo", "psutil"]
     install:
       - id: node
         kind: node
