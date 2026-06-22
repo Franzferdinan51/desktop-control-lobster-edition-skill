@@ -278,6 +278,52 @@ export function createDesktopBackend(options = {}) {
       return textResult(`Closed window: ${args.title || 'active'}`);
     },
 
+    async mouseHover(args = {}) {
+      await runPython('mouse_hover', args);
+      return textResult(`Hovered mouse at (${args.x}, ${args.y})`);
+    },
+
+    async rightClick(args = {}) {
+      await runPython('right_click', args);
+      const where = args.x !== undefined && args.y !== undefined ? ` at (${args.x}, ${args.y})` : '';
+      return textResult(`Right-clicked${where}`);
+    },
+
+    async middleClick(args = {}) {
+      await runPython('middle_click', args);
+      const where = args.x !== undefined && args.y !== undefined ? ` at (${args.x}, ${args.y})` : '';
+      return textResult(`Middle-clicked${where}`);
+    },
+
+    async focusWindow(args = {}) {
+      if (!args.title) throw new Error('desktop_focus_window requires title');
+      await runPython('focus_window', args);
+      return textResult(`Focused window: ${args.title}`);
+    },
+
+    async screenshotWindow(args = {}) {
+      if (!args.title) throw new Error('desktop_screenshot_window requires title');
+      const result = await runPython('screenshot_window', args);
+      if (result.error) {
+        return textResult(`Screenshot error: ${result.error}`);
+      }
+      if (!result.image) {
+        return textResult(`Window not found: ${args.title}`);
+      }
+      return imageResult(result.image);
+    },
+
+    async getWindowInfo(args = {}) {
+      if (!args.title) throw new Error('desktop_get_window_info requires title');
+      return jsonResult(await runPython('get_window_info', args));
+    },
+
+    async waitForImage(args = {}) {
+      if (!args.image_path) throw new Error('desktop_wait_for_image requires image_path');
+      const result = await runPython('wait_for_image', args);
+      return jsonResult(result);
+    },
+
     async moveWindow(args = {}) {
       await runPython('move_window', args);
       return textResult(`Moved window: ${args.title || 'active'} to (${args.x}, ${args.y})`);

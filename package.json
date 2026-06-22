@@ -14,7 +14,10 @@
     "setup:hermes": "node scripts/setup-config.js hermes",
     "setup:codex": "node scripts/setup-config.js codex",
     "setup:claude-desktop": "node scripts/setup-config.js claude-desktop",
-    "setup:all": "node scripts/setup-config.js all"
+    "setup:all": "node scripts/setup-config.js all",
+    "check": "bash scripts/check.sh",
+    "inspect": "node scripts/inspect.js",
+    "inspect:list": "node scripts/inspect.js --list"
   },
   "engines": {
     "node": ">=18"

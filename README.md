@@ -57,7 +57,10 @@ Each target also accepts `--out <file>` to write the config to disk. See
 
 ```bash
 npm run verify      # prints desktop / android / codex backend status
-npm test            # runs the 29-test suite
+npm test            # runs the 38-test suite
+npm run check       # full pre-flight health check (Node, Python, deps, server, tests)
+npm run inspect     # interactive REPL for calling tools
+npm run inspect:list # list every registered tool
 ```
 
 ## Requirements
@@ -264,6 +267,15 @@ Check backend availability:
 npm run status
 ```
 
+Run the full pre-flight health check (Node, Python, pip, Python deps, ADB,
+server boot, and the test suite):
+
+```bash
+npm run check
+npm run check -- --json     # JSON output for CI / agent workflows
+npm run check -- --no-tests # skip the test-suite step
+```
+
 Start the MCP server:
 
 ```bash
@@ -287,6 +299,15 @@ bash scripts/install.sh
 bash scripts/install.sh --target hermes
 ```
 
+Try out tools interactively:
+
+```bash
+npm run inspect          # REPL: prompt for tool + JSON args
+npm run inspect:list     # list every registered tool
+node scripts/inspect.js desktop_screenshot '{}'   # one-shot call
+node scripts/inspect.js --server                  # boot server in --status mode
+```
+
 The implementation is intentionally small:
 
 - `src/server.js` handles MCP JSON-RPC over stdio.
@@ -297,6 +318,12 @@ The implementation is intentionally small:
 - `scripts/pyautogui_action.py` performs PyAutoGUI actions from Node.
 - `scripts/install.sh` and `scripts/setup-config.js` handle OS detection,
   dependency install, and per-framework MCP config generation.
+- `scripts/check.sh` is the pre-flight health check.
+- `scripts/inspect.js` is the interactive tool-caller.
+
+For an **AI agent integrating with this server**, see
+[`docs/AGENTS.md`](docs/AGENTS.md). It covers tool groupings, safety
+guidance, and worked examples.
 
 ## Status
 
@@ -305,6 +332,7 @@ Validated locally with:
 ```bash
 npm test
 npm run status
+npm run check
 ```
 
-The test suite covers MCP initialization compatibility, tool registration, alias routing, Android command construction, Android parsers, Codex config generation, env-overridable RS helper resolution, and the setup-config CLI for all six targets.
+The test suite covers MCP initialization compatibility, tool registration, alias routing, Android command construction, Android parsers, Codex config generation, env-overridable RS helper resolution, the new 7-tool desktop expansion (hover / right / middle / focus / screenshot-window / get-window-info / wait-for-image), the setup-config CLI for all six targets, and the inspect.js CLI for the read-only subset.

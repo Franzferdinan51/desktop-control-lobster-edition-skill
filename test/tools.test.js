@@ -132,3 +132,81 @@ test('lobster enhancement aliases route to desktop handlers', async () => {
     ['file_read', { path: '/tmp/a' }],
   ]);
 });
+
+test('mouse hover / right / middle click tools route to backend methods', async () => {
+  const calls = [];
+  const registry = createToolRegistry({
+    desktop: {
+      mouseHover: (args) => { calls.push(['mouseHover', args]); return { content: [{ type: 'text', text: 'hovered' }] }; },
+      rightClick: (args) => { calls.push(['rightClick', args]); return { content: [{ type: 'text', text: 'right' }] }; },
+      middleClick: (args) => { calls.push(['middleClick', args]); return { content: [{ type: 'text', text: 'middle' }] }; },
+    },
+  });
+  await registry.callTool('desktop_mouse_hover', { x: 100, y: 200 });
+  await registry.callTool('desktop_mouse_right_click', { x: 50, y: 60 });
+  await registry.callTool('desktop_mouse_middle_click', {});
+  const names = calls.map((c) => c[0]);
+  assert.ok(names.includes('mouseHover'));
+  assert.ok(names.includes('rightClick'));
+  assert.ok(names.includes('middleClick'));
+});
+
+test('window / image-wait tools route to backend methods', async () => {
+  const calls = [];
+  const registry = createToolRegistry({
+    desktop: {
+      focusWindow: (args) => { calls.push(['focusWindow', args]); return { content: [{ type: 'text', text: 'focused' }] }; },
+      screenshotWindow: (args) => { calls.push(['screenshotWindow', args]); return { content: [{ type: 'image', data: 'BASE64', mimeType: 'image/png' }] }; },
+      getWindowInfo: (args) => { calls.push(['getWindowInfo', args]); return { content: [{ type: 'text', text: '{}' }] }; },
+      waitForImage: (args) => { calls.push(['waitForImage', args]); return { content: [{ type: 'text', text: '{}' }] }; },
+    },
+  });
+  const shot = await registry.callTool('desktop_screenshot_window', { title: 'Safari' });
+  assert.equal(shot.content[0].type, 'image');
+  assert.equal(shot.content[0].data, 'BASE64');
+  await registry.callTool('desktop_focus_window', { title: 'Finder' });
+  await registry.callTool('desktop_get_window_info', { title: 'Terminal' });
+  await registry.callTool('desktop_wait_for_image', { image_path: '/tmp/x.png', timeout: 5 });
+  const names = calls.map((c) => c[0]);
+  for (const expected of ['focusWindow', 'screenshotWindow', 'getWindowInfo', 'waitForImage']) {
+    assert.ok(names.includes(expected), `expected ${expected} in ${names}`);
+  }
+});
+
+test('screenshot_window surfaces backend error gracefully', async () => {
+  const registry = createToolRegistry({
+    desktop: {
+      screenshotWindow: () => { throw new Error('window not found'); },
+    },
+  });
+  const result = await registry.callTool('desktop_screenshot_window', { title: 'Nope' });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /window not found/);
+});
+
+test('wait_for_image surfaces backend error gracefully', async () => {
+  const registry = createToolRegistry({
+    desktop: {
+      waitForImage: () => { throw new Error('image_path required'); },
+    },
+  });
+  const result = await registry.callTool('desktop_wait_for_image', {});
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /image_path/);
+});
+
+test('new tools are advertised in tools/list', () => {
+  const registry = createToolRegistry();
+  const names = registry.listTools().tools.map((t) => t.name);
+  for (const expected of [
+    'desktop_mouse_hover',
+    'desktop_mouse_right_click',
+    'desktop_mouse_middle_click',
+    'desktop_focus_window',
+    'desktop_screenshot_window',
+    'desktop_get_window_info',
+    'desktop_wait_for_image',
+  ]) {
+    assert.ok(names.includes(expected), `tools/list should include ${expected}`);
+  }
+});

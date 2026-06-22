@@ -44,6 +44,13 @@ const desktopToolSpecs = [
   ['desktop_file_write', 'Write text to a local file.', { path: { type: 'string' }, content: { type: 'string' } }, ['path', 'content']],
   ['desktop_terminal', 'Run a local shell command.', { command: { type: 'string' }, timeout: { type: 'integer', default: 30 } }, ['command']],
   ['desktop_rs_lookup', 'Run the local RuneScape lookup helper when available.', { player: { type: 'string' }, clan: { type: 'string' } }],
+  ['desktop_mouse_hover', 'Move the mouse to (x, y) and hold position; useful for triggering hover UI states.', { x: { type: 'integer' }, y: { type: 'integer' }, duration: { type: 'number', default: 0 } }, ['x', 'y']],
+  ['desktop_mouse_right_click', 'Right-click on the desktop (optionally at x, y).', { x: { type: 'integer' }, y: { type: 'integer' } }],
+  ['desktop_mouse_middle_click', 'Middle-click on the desktop (optionally at x, y).', { x: { type: 'integer' }, y: { type: 'integer' } }],
+  ['desktop_focus_window', 'Bring the window with the matching title to the foreground (cross-platform fallback).', { title: { type: 'string' } }, ['title']],
+  ['desktop_screenshot_window', 'Capture a screenshot of a specific window by title.', { title: { type: 'string' } }, ['title']],
+  ['desktop_get_window_info', 'Return position, size, and state info for the window with the matching title.', { title: { type: 'string' } }, ['title']],
+  ['desktop_wait_for_image', 'Poll the screen until an image appears at the given template path, or timeout.', { image_path: { type: 'string' }, timeout: { type: 'number', default: 10 }, confidence: { type: 'number', default: 0.9 } }, ['image_path']],
 ];
 
 const androidToolSpecs = [
@@ -142,6 +149,13 @@ export function createToolRegistry(backends = {}) {
     desktop_file_write: (args) => desktop.fileWrite(args),
     desktop_terminal: (args) => desktop.terminal(args),
     desktop_rs_lookup: (args) => desktop.rsLookup(args),
+    desktop_mouse_hover: (args) => desktop.mouseHover(args),
+    desktop_mouse_right_click: (args) => desktop.rightClick(args),
+    desktop_mouse_middle_click: (args) => desktop.middleClick(args),
+    desktop_focus_window: (args) => desktop.focusWindow(args),
+    desktop_screenshot_window: (args) => desktop.screenshotWindow(args),
+    desktop_get_window_info: (args) => desktop.getWindowInfo(args),
+    desktop_wait_for_image: (args) => desktop.waitForImage(args),
     desktop_get_all_windows: (args) => desktop.getAllWindows(args),
     desktop_minimize_window: (args) => desktop.minimizeWindow(args),
     desktop_maximize_window: (args) => desktop.maximizeWindow(args),
