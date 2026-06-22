@@ -14,6 +14,7 @@
     "setup:hermes": "node scripts/setup-config.js hermes",
     "setup:codex": "node scripts/setup-config.js codex",
     "setup:claude-desktop": "node scripts/setup-config.js claude-desktop",
+    "setup:cua": "node scripts/setup-config.js cua",
     "setup:all": "node scripts/setup-config.js all",
     "check": "bash scripts/check.sh",
     "inspect": "node scripts/inspect.js",

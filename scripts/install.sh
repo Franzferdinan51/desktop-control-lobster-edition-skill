@@ -16,7 +16,7 @@
 #   bash scripts/install.sh --target codex --path /opt/ndc/src/server.js
 #   bash scripts/install.sh --no-config       # do not print MCP config
 #
-# Supported targets: openclaw, hermes, codex, claude-desktop, mcp-json, all
+# Supported targets: openclaw, hermes, codex, claude-desktop, mcp-json, cua, all
 # (See scripts/setup-config.js for details.)
 
 set -euo pipefail
@@ -40,7 +40,7 @@ Usage:
 Options:
   --no-tests              Skip the npm test smoke check
   --no-config             Do not print the MCP config snippet at the end
-  --target <name>         Config target: openclaw, hermes, codex, claude-desktop, mcp-json, all
+  --target <name>         Config target: openclaw, hermes, codex, claude-desktop, mcp-json, cua, all
                          (default: openclaw)
   --path <file>           Override the server.js path used in the printed config
   --help, -h              Show this help
@@ -142,6 +142,21 @@ if [[ "$RUN_TESTS" -eq 1 ]]; then
   else
     err "Tests failed. See output above."
     exit 1
+  fi
+fi
+
+# --- 3b. cua-driver install (when target includes cua) ---------------------
+if [[ "$TARGET" == "cua" || "$TARGET" == "all" ]]; then
+  log "Installing cua-driver (trycua/cua) for CUA backend..."
+  if command -v cua-driver >/dev/null 2>&1; then
+    log "cua-driver already installed: $(command -v cua-driver) ($(cua-driver --version 2>/dev/null | head -1 || echo unknown))"
+  else
+    log "Running cua-driver install script (requires curl + sudo for /Applications)..."
+    if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.sh 2>/dev/null)"; then
+      log "cua-driver installed. Grant Accessibility + Screen Recording to /Applications/CuaDriver.app on first run."
+    else
+      err "cua-driver install failed. Skipping. Desktop tools still work; CUA tools will be unavailable."
+    fi
   fi
 fi
 

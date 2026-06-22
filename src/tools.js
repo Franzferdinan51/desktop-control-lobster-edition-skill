@@ -1,5 +1,6 @@
 import { createAndroidBackend } from './backends/android.js';
 import { createCodexBackend } from './backends/codex.js';
+import { createCuaBackend, killAppProtectionReason, evictOldScreenshots, scanForPromptInjection, resolveCuaDriverPath } from './backends/cua.js';
 import { createDesktopBackend } from './backends/desktop.js';
 import { errorResult, jsonResult } from './response.js';
 
@@ -51,6 +52,125 @@ const desktopToolSpecs = [
   ['desktop_screenshot_window', 'Capture a screenshot of a specific window by title.', { title: { type: 'string' } }, ['title']],
   ['desktop_get_window_info', 'Return position, size, and state info for the window with the matching title.', { title: { type: 'string' } }, ['title']],
   ['desktop_wait_for_image', 'Poll the screen until an image appears at the given template path, or timeout.', { image_path: { type: 'string' }, timeout: { type: 'number', default: 10 }, confidence: { type: 'number', default: 0.9 } }, ['image_path']],
+];
+
+// ---------------------------------------------------------------------------
+// CUA (Computer-Use Agent) tools — wrap trycua/cua-driver for background-mode
+// desktop control. Unlike the pyautogui-based tools above, these dispatch input
+// via platform accessibility APIs (AX on macOS, UIA on Windows, AT-SPI2 on Linux)
+// so the user's real cursor never moves. Requires cua-driver installed:
+//
+//   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.sh)"
+//
+// On macOS, grant Accessibility + Screen Recording permissions to
+// /Applications/CuaDriver.app on first run.
+// ---------------------------------------------------------------------------
+const cuaToolSpecs = [
+  [
+    'desktop_launch_app_cua',
+    'Launch a macOS app in the background (CUA backend variant — does NOT come to foreground). Use this instead of desktop_launch_app when you want the CUA behavior.',
+    { name: { type: 'string' }, bundle_id: { type: 'string' } },
+  ],
+  [
+    'desktop_ax_tree',
+    'Return a structured accessibility tree of running apps (and optionally one window with element_index handles). Background-mode safe — no cursor moves.',
+    {
+      pid: { type: 'integer', description: 'Optional pid to deep-snapshot one window.' },
+      window_id: { type: 'integer', description: 'Optional explicit window_id (auto-resolved from pid if omitted).' },
+      max_elements: { type: 'integer', default: 500 },
+      max_depth: { type: 'integer', default: 12 },
+    },
+  ],
+  [
+    'desktop_list_apps',
+    'List macOS apps (both running and installed-but-not-running) with per-app state flags. Background-mode safe.',
+    {},
+  ],
+  [
+    'desktop_focus_app',
+    'Route input to a background app without stealing focus. On macOS this is implicit (CGEventPostToPid reaches backgrounded apps); this tool resolves pid and calls bring_to_front for parity.',
+    {
+      pid: { type: 'integer' },
+      name: { type: 'string', description: 'App name (resolved to pid automatically).' },
+    },
+  ],
+  [
+    'desktop_launch_app',
+    'Launch a macOS app in the background — the target does NOT come to the foreground.',
+    { name: { type: 'string' }, bundle_id: { type: 'string' } },
+  ],
+  [
+    'desktop_som_capture',
+    'Capture a window screenshot with SOM-labeled AX tree. Returns {image, title, elements:[{element_index, role, label, frame}], tree_markdown}. Click via desktop_click_element(element_index=N) afterwards.',
+    {
+      pid: { type: 'integer' },
+      window_id: { type: 'integer' },
+      max_elements: { type: 'integer', default: 800 },
+      max_depth: { type: 'integer', default: 15 },
+    },
+  ],
+  [
+    'desktop_click_element',
+    'Click by element_index (preferred — works on backgrounded windows, no cursor move) or pixel coordinates. Use desktop_som_capture first to get element_index handles.',
+    {
+      pid: { type: 'integer' },
+      window_id: { type: 'integer' },
+      element_index: { type: 'integer', description: 'Preferred. Index from prior desktop_som_capture.' },
+      x: { type: 'integer' },
+      y: { type: 'integer' },
+      button: { type: 'string', default: 'left', enum: ['left', 'right', 'middle'] },
+      action: { type: 'string', default: 'press', enum: ['press', 'show_menu', 'pick', 'confirm', 'cancel', 'open'] },
+      capture_after: { type: 'boolean', default: false, description: 'Capture screenshot after the click for verification.' },
+    },
+  ],
+  [
+    'desktop_drag_element',
+    'Drag by element_index pair (from_index, to_index) or pixel coordinates.',
+    {
+      pid: { type: 'integer' },
+      window_id: { type: 'integer' },
+      from_index: { type: 'integer' },
+      to_index: { type: 'integer' },
+      from_x: { type: 'integer' },
+      from_y: { type: 'integer' },
+      to_x: { type: 'integer' },
+      to_y: { type: 'integer' },
+    },
+  ],
+  [
+    'desktop_type_into',
+    'Type text into a focused element by element_index (preferred) or just to the pid (sends to focused control).',
+    {
+      pid: { type: 'integer' },
+      window_id: { type: 'integer' },
+      element_index: { type: 'integer' },
+      text: { type: 'string' },
+    },
+  ],
+  [
+    'desktop_key_combo',
+    'Press a hotkey combination (e.g. ["cmd","shift","p"]).',
+    { keys: { type: 'array', items: { type: 'string' } }, pid: { type: 'integer' } },
+  ],
+  [
+    'desktop_kill_app',
+    'Terminate a process by pid with safety guards. Refuses pid=1, kernel_task, WindowServer, loginwindow, launchd, and any pid<50. Hard-blocked, not overridable by env.',
+    { pid: { type: 'integer' } },
+    ['pid'],
+  ],
+  [
+    'desktop_screenshot_prompt_guard',
+    'OCR + prompt-injection scan. Pass either text= for direct scan, or take a fresh screenshot and scan it. Returns {safe, reasons, ocr_text}.',
+    { text: { type: 'string' } },
+  ],
+  [
+    'desktop_evict_screenshots',
+    'Token-aware eviction: keep the most recent N screenshots, summarize the rest. Pure utility — pass history[] and get back {kept, evicted, summary}.',
+    {
+      history: { type: 'array', description: 'Array of {ts, data, summary?} items.' },
+      keep_last_n: { type: 'integer', default: 5 },
+    },
+  ],
 ];
 
 const androidToolSpecs = [
@@ -106,9 +226,11 @@ export function createToolRegistry(backends = {}) {
   const desktop = backends.desktop ?? createDesktopBackend();
   const android = backends.android ?? createAndroidBackend();
   const codex = backends.codex ?? createCodexBackend();
+  const cua = backends.cua ?? createCuaBackend();
 
   const specs = [
     ...desktopToolSpecs.map((spec) => toolSpec(...spec)),
+    ...cuaToolSpecs.map((spec) => toolSpec(...spec)),
     ...androidToolSpecs.map((spec) => toolSpec(...spec)),
     toolSpec('backend_status', 'Report desktop, Android, and Codex backend availability.'),
     toolSpec('codex_mcp_config', 'Return a ready-to-use Codex Computer Use MCP config when the supported binary is available.'),
@@ -167,6 +289,54 @@ export function createToolRegistry(backends = {}) {
     desktop_list_processes: (args) => desktop.listProcesses(args),
     desktop_kill_process: (args) => desktop.killProcess(args),
     desktop_wait: (args) => desktop.wait(args),
+
+    // -----------------------------------------------------------------------
+    // CUA (Computer-Use Agent) tools — background-mode desktop control via
+    // cua-driver. The user's cursor never moves and keyboard focus stays theirs.
+    // Names prefixed desktop_* intentionally: the alias map below redirects
+    // launch_app / computer_use_launch_app to desktop_launch_app (desktop backend),
+    // NOT the CUA one. To use the CUA variant, call desktop_launch_app_cua.
+    // -----------------------------------------------------------------------
+    desktop_launch_app_cua: (args) => cua.launchApp(args ?? {}),
+    desktop_ax_tree: async (args) => cua.axTree(args ?? {}),
+    desktop_list_apps: async (args) => cua.listApps(args ?? {}),
+    desktop_focus_app: async (args) => cua.focusApp(args ?? {}),
+    desktop_som_capture: async (args) => cua.somCapture(args ?? {}),
+    desktop_click_element: async (args) => {
+      const result = await cua.clickElement(args ?? {});
+      if (args?.capture_after) {
+        try {
+          const after = await cua.somCapture({ pid: args.pid, window_id: args.window_id, max_elements: 50, max_depth: 5 });
+          return {
+            ...result,
+            content: [
+              ...(result.content ?? []),
+              { type: 'text', text: JSON.stringify({ capture_after: { elements: after.elements?.slice(0, 20), title: after.title } }) },
+            ],
+          };
+        } catch {
+          return result;
+        }
+      }
+      return result;
+    },
+    desktop_drag_element: async (args) => cua.dragElement(args ?? {}),
+    desktop_type_into: async (args) => cua.typeInto(args ?? {}),
+    desktop_key_combo: async (args) => cua.keyCombo(args ?? {}),
+    desktop_kill_app: async (args) => {
+      // Defense-in-depth: re-check here even though backend does it too
+      const reason = killAppProtectionReason(Number(args?.pid));
+      if (reason) {
+        return errorResult(`kill_app blocked: ${reason} (pid=${args?.pid})`);
+      }
+      return cua.killApp(args ?? {});
+    },
+    desktop_screenshot_prompt_guard: async (args) => cua.screenshotPromptGuard(args ?? {}),
+    desktop_evict_screenshots: async (args) => {
+      const history = Array.isArray(args?.history) ? args.history : [];
+      const result = evictOldScreenshots(history, { keep_last_n: Number(args?.keep_last_n ?? 5) });
+      return jsonResult(result);
+    },
     android_devices: (args) => android.devices(args),
     android_screenshot: (args) => android.screenshot(args),
     android_screen_size: (args) => android.screenSize(args),
@@ -180,14 +350,17 @@ export function createToolRegistry(backends = {}) {
     android_logcat: (args) => android.logcat(args),
     backend_status: async () => jsonResult({
       desktop: await desktop.status(),
+      cua: await cua.status(),
       android: await android.status(),
       codex: await codex.status(),
+      cua_driver_path: resolveCuaDriverPath(),
     }),
     codex_mcp_config: async () => jsonResult(codex.mcpConfig()),
     permissions_check: async () => jsonResult({
       macos: {
         screenRecording: 'Required for screenshots through Codex Computer Use or screencapture.',
         accessibility: 'Required for PyAutoGUI mouse and keyboard control.',
+        cuaDriver: 'Required for background-mode CUA tools (desktop_ax_tree, desktop_click_element, etc.). Grant Accessibility + Screen Recording to /Applications/CuaDriver.app.',
       },
       android: {
         adb: 'Required for Android device controls.',

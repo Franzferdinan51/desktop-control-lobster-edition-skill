@@ -26,7 +26,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
 const DEFAULT_SERVER_PATH = join(REPO_ROOT, 'src', 'server.js');
 
-const KNOWN_TARGETS = ['openclaw', 'hermes', 'codex', 'claude-desktop', 'mcp-json', 'all'];
+const KNOWN_TARGETS = ['openclaw', 'hermes', 'codex', 'claude-desktop', 'mcp-json', 'cua', 'all'];
 
 function parseArgs(argv) {
   const args = { target: null, out: null, path: null, pretty: true };
@@ -56,6 +56,7 @@ function helpText() {
     '  codex           OpenAI Codex CLI (TOML block for config.toml)',
     '  claude-desktop  Anthropic Claude Desktop (claude_desktop_config.json)',
     '  mcp-json        Raw MCP server JSON (works for any stdio MCP client)',
+    '  cua             Reminder to also install trycua/cua-driver for CUA tools',
     '  all             Print every target in turn',
     '',
     'Options:',
@@ -138,6 +139,29 @@ const RENDERERS = {
   openclaw: { render: renderOpenClaw, header: '# OpenClaw / DuckBot / generic gateway — paste into mcp.json' },
   hermes: { render: renderHermes, header: '# Hermes Agent — paste into ~/.hermes/mcp.json (or operator-configured mcp.config)' },
   codex: { render: renderCodex, header: '# Codex CLI — append to ~/.codex/config.toml' },
+  cua: {
+    render: () => [
+      '# CUA backend — additional setup for background-mode tools.',
+      '# The desktop backend works without this; CUA tools (desktop_ax_tree,',
+      '# desktop_click_element, desktop_som_capture, etc.) need cua-driver installed.',
+      '',
+      '# 1. Install cua-driver:',
+      '#    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.sh)"',
+      '#',
+      '# 2. Grant Accessibility + Screen Recording to /Applications/CuaDriver.app',
+      '#    on macOS (System Settings → Privacy & Security).',
+      '#',
+      '# 3. Verify:',
+      '#    cua-driver --version     # should print cua-driver 0.x.y',
+      '#',
+      '# 4. (Optional) override the binary path:',
+      '#    export NEWEST_DC_CUA_DRIVER=/custom/path/to/cua-driver',
+      '#',
+      '# Once installed, backend_status reports cua.available=true and',
+      '# the 12 CUA tools work alongside the desktop ones.',
+    ].join('\n'),
+    header: '# CUA backend setup reminder',
+  },
   'claude-desktop': { render: renderClaudeDesktop, header: '# Claude Desktop — paste into claude_desktop_config.json' },
   'mcp-json': { render: renderMcpJson, header: '# Raw MCP server JSON — works for any stdio MCP client' },
 };

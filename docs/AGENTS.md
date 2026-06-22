@@ -21,8 +21,8 @@ exits with code 0 on success.
 
 ## Tool Groups
 
-This server exposes **~90 tools** (including compatibility aliases). They
-fall into four buckets:
+This server exposes **~102 tools** (including compatibility aliases). They
+fall into five buckets:
 
 ### 1. Desktop (40+ tools)
 Direct control of the local desktop on macOS, Linux, or Windows.
@@ -40,6 +40,38 @@ Direct control of the local desktop on macOS, Linux, or Windows.
 | **OCR** | `desktop_ocr` |
 | **System** | `desktop_terminal`, `desktop_run_script`, `desktop_file_read`, `desktop_file_write`, `desktop_list_processes`, `desktop_kill_process` |
 | **Game** | `desktop_rs_lookup` (RuneScape, optional helper) |
+
+### 2. CUA — Computer-Use Agent (12 tools, optional)
+Background-mode desktop control via [trycua/cua-driver](https://github.com/trycua/cua).
+Unlike the desktop tools above, **the user's real cursor never moves** and keyboard
+focus stays theirs. Dispatch happens via platform accessibility APIs (AX on macOS,
+UIA on Windows, AT-SPI2 on Linux).
+
+**Install:** `bash scripts/install.sh --target cua` (or `curl -fsSL https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.sh | bash`).
+Grant Accessibility + Screen Recording to `/Applications/CuaDriver.app` on macOS.
+
+| Category | Tools |
+|----------|-------|
+| **App discovery** | `desktop_list_apps`, `desktop_focus_app`, `desktop_launch_app_cua` |
+| **Accessibility tree** | `desktop_ax_tree` (structured elements + tree_markdown) |
+| **SOM capture** | `desktop_som_capture` (screenshot + numbered elements in one call) |
+| **Element-indexed actions** | `desktop_click_element`, `desktop_drag_element`, `desktop_type_into` |
+| **Hotkey** | `desktop_key_combo` |
+| **Guarded actions** | `desktop_kill_app` (refuses pid=1, pid<50, system pids) |
+| **Safety** | `desktop_screenshot_prompt_guard` (prompt-injection scan), `desktop_evict_screenshots` (token-aware eviction) |
+
+**Why two backends?** The desktop backend drives the user's real cursor (fine for
+full automation tasks when nobody else is using the machine). The CUA backend is
+for when the user is actively working — the agent runs alongside, never disturbing
+the user's session.
+
+**Env vars:**
+- `NEWEST_DC_CUA_DRIVER` — absolute path to cua-driver (default: `~/.local/bin/cua-driver`)
+
+**Pattern for vision-model agents:**
+1. `desktop_som_capture({pid})` → get screenshot + structured elements with `element_index`
+2. `desktop_click_element({pid, element_index: 7, button: "left", capture_after: true})` → click by ID, get fresh snapshot back
+3. `desktop_evict_screenshots({history, keep_last_n: 5})` → trim token usage
 
 ### 2. Android (11 tools)
 ADB-backed control of phones and emulators. Requires `adb` on `PATH`
