@@ -28,18 +28,51 @@ npm start
 
 The server speaks JSON-RPC over stdio, as expected by Codex and other MCP clients.
 
+## Quick Install (any agent framework)
+
+```bash
+git clone https://github.com/Franzferdinan51/desktop-control-lobster-edition-skill.git
+cd desktop-control-lobster-edition-skill
+bash scripts/install.sh --target hermes
+```
+
+The installer detects your OS, installs Python dependencies, runs the test
+suite as a smoke check, and prints a ready-to-paste MCP config snippet for
+your agent framework.
+
+### Per-framework one-liners
+
+```bash
+npm run setup:openclaw         # OpenClaw / DuckBot / generic gateway
+npm run setup:hermes           # Hermes Agent (NousResearch)
+npm run setup:codex            # OpenAI Codex CLI (TOML block)
+npm run setup:claude-desktop   # Anthropic Claude Desktop
+npm run setup:all              # every target at once
+```
+
+Each target also accepts `--out <file>` to write the config to disk. See
+`node scripts/setup-config.js --help` for all options.
+
+### Verify the install
+
+```bash
+npm run verify      # prints desktop / android / codex backend status
+npm test            # runs the 29-test suite
+```
+
 ## Requirements
 
 - Node.js 18 or newer.
 - macOS, Linux, or Windows for desktop automation.
-- Python 3 with PyAutoGUI and Pillow for mouse, keyboard, pixel, and fallback screenshot actions.
+- Python 3 with PyAutoGUI, Pillow, pygetwindow, pytesseract, screeninfo, and psutil.
 - ADB for Android controls.
 - Codex.app on macOS if you want Codex Computer Use detection.
 
-Install the Python dependencies:
+The `scripts/install.sh` script installs the Python dependencies from
+`requirements.txt`. If you'd rather do it manually:
 
 ```bash
-python3 -m pip install pyautogui pillow  # On Windows, use 'python' instead of 'python3'
+python3 -m pip install -r requirements.txt   # On Windows, use 'python' instead of 'python3'
 ```
 
 Check Android availability:
@@ -69,7 +102,13 @@ Window activation depends on the desktop environment and OS focus rules. Some Li
 
 ## Codex MCP Config
 
-Add this to your Codex config, adjusting the path if you clone the repo somewhere else:
+The fastest way to get a Codex-ready config is:
+
+```bash
+npm run setup:codex
+```
+
+Or generate it manually and append to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.newest-desktop-control]
@@ -231,6 +270,23 @@ Start the MCP server:
 npm start
 ```
 
+Generate MCP config snippets for any agent framework:
+
+```bash
+npm run setup:openclaw
+npm run setup:hermes
+npm run setup:codex
+npm run setup:claude-desktop
+npm run setup:all
+```
+
+Run the cross-platform installer (also accepts a target):
+
+```bash
+bash scripts/install.sh
+bash scripts/install.sh --target hermes
+```
+
 The implementation is intentionally small:
 
 - `src/server.js` handles MCP JSON-RPC over stdio.
@@ -239,6 +295,8 @@ The implementation is intentionally small:
 - `src/backends/android.js` implements ADB-backed controls.
 - `src/backends/codex.js` detects Codex Computer Use and emits supported config.
 - `scripts/pyautogui_action.py` performs PyAutoGUI actions from Node.
+- `scripts/install.sh` and `scripts/setup-config.js` handle OS detection,
+  dependency install, and per-framework MCP config generation.
 
 ## Status
 
@@ -249,4 +307,4 @@ npm test
 npm run status
 ```
 
-The test suite covers MCP initialization compatibility, tool registration, alias routing, Android command construction, Android parsers, and Codex config generation.
+The test suite covers MCP initialization compatibility, tool registration, alias routing, Android command construction, Android parsers, Codex config generation, env-overridable RS helper resolution, and the setup-config CLI for all six targets.

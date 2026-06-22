@@ -7,7 +7,14 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test",
-    "status": "node src/server.js --status"
+    "status": "node src/server.js --status",
+    "verify": "node src/server.js --status",
+    "setup": "bash scripts/install.sh",
+    "setup:openclaw": "node scripts/setup-config.js openclaw",
+    "setup:hermes": "node scripts/setup-config.js hermes",
+    "setup:codex": "node scripts/setup-config.js codex",
+    "setup:claude-desktop": "node scripts/setup-config.js claude-desktop",
+    "setup:all": "node scripts/setup-config.js all"
   },
   "engines": {
     "node": ">=18"

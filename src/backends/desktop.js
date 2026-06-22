@@ -4,10 +4,35 @@ import { imageResult, jsonResult, textResult } from '../response.js';
 import { runFile, runFileWithInput } from '../process.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PY_ACTION = join(__dirname, '..', '..', 'scripts', 'pyautogui_action.py');
-const RS_TOOL_PATH = '/Users/duckets/Desktop/rs-agent-tools/mcp-launcher.py';
+
+// Resolve the RuneScape lookup helper in this order:
+//   1. NEWEST_DC_RS_TOOL_PATH (preferred, generic)
+//   2. DUCKETS_RS_TOOL_PATH   (legacy DuckBot-specific override)
+//   3. ~/Desktop/rs-agent-tools/mcp-launcher.py (developer default)
+//   4. ~/rs-agent-tools/mcp-launcher.py        (portable default)
+// `null` means "the tool is not installed on this machine" and the
+// `desktop_rs_lookup` handler will throw a clear error when called.
+//
+// Resolved lazily on every call so env overrides (and tests) can change
+// the candidate set without re-importing this module.
+function getDefaultRsToolPaths() {
+  return [
+    process.env.NEWEST_DC_RS_TOOL_PATH,
+    process.env.DUCKETS_RS_TOOL_PATH,
+    join(homedir(), 'Desktop', 'rs-agent-tools', 'mcp-launcher.py'),
+    join(homedir(), 'rs-agent-tools', 'mcp-launcher.py'),
+  ].filter(Boolean);
+}
+
+function resolveRsToolPath() {
+  return getDefaultRsToolPaths().find((path) => existsSync(path)) ?? null;
+}
+
+export { resolveRsToolPath, getDefaultRsToolPaths as DEFAULT_RS_TOOL_PATHS };
 
 // Cross-platform Python command: Windows uses 'python', macOS/Linux uses 'python3'
 function pythonCmd(platform = process.platform) {
@@ -405,10 +430,18 @@ export function createDesktopBackend(options = {}) {
     },
 
     async rsLookup(args = {}) {
-      if (!existsSync(RS_TOOL_PATH)) throw new Error(`RS lookup helper not found: ${RS_TOOL_PATH}`);
+      const candidates = getDefaultRsToolPaths();
+      const rsToolPath = candidates.find((path) => existsSync(path)) ?? null;
+      if (!rsToolPath) {
+        const searched = candidates.length ? candidates.join(', ') : '(none)';
+        throw new Error(
+          `RS lookup helper not found. Searched: ${searched}. ` +
+            `Set NEWEST_DC_RS_TOOL_PATH to override, or install rs-agent-tools.`,
+        );
+      }
       const lookupArgs = args.player ? ['player', args.player] : args.clan ? ['clan', args.clan] : null;
       if (!lookupArgs) throw new Error('desktop_rs_lookup requires player or clan');
-      const { stdout, stderr } = await runFile(pythonCmd(), [RS_TOOL_PATH, ...lookupArgs], {
+      const { stdout, stderr } = await runFile(pythonCmd(), [rsToolPath, ...lookupArgs], {
         timeout: 15000,
         maxBuffer: 1024 * 1024 * 3,
       });

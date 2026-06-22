@@ -16,10 +16,17 @@ metadata:
         - "{SKILL_DIR}/src/server.js"
       transport: stdio
       install_hint: |
-        After installing the skill, update your OpenClaw MCP config with the correct server path for your platform:
-        - macOS/Linux: ~/.openclaw/skills/desktop-control-lobster/src/server.js
-        - Windows: %USERPROFILE%\.openclaw\skills\desktop-control-lobster\src\server.js
-        Or use the provided scripts/mcp-wrapper.sh (macOS/Linux) or scripts/mcp-wrapper.bat (Windows).
+        Run `bash scripts/install.sh` from the repo root. It detects the OS,
+        installs the Python dependencies, runs the smoke tests, and prints
+        a ready-to-paste MCP config snippet for OpenClaw, Hermes Agent,
+        Codex CLI, Claude Desktop, or any raw MCP client.
+
+        For a one-liner per agent framework:
+          npm run setup:openclaw
+          npm run setup:hermes
+          npm run setup:codex
+          npm run setup:claude-desktop
+          npm run setup:all
 ---
 
 # Desktop Control (Lobster Edition)
@@ -27,6 +34,25 @@ metadata:
 Consolidated MCP gateway for desktop and Android control across macOS, Linux, Windows, and Android devices.
 
 ## Usage
+
+### Quick install (any agent framework)
+```bash
+git clone https://github.com/Franzferdinan51/desktop-control-lobster-edition-skill.git
+cd desktop-control-lobster-edition-skill
+bash scripts/install.sh --target hermes
+```
+
+The installer detects your OS, installs Python dependencies, runs the test
+suite, and prints a ready-to-paste MCP config snippet.
+
+### One-liner per framework
+```bash
+npm run setup:openclaw         # OpenClaw / DuckBot / generic gateway
+npm run setup:hermes           # Hermes Agent (NousResearch)
+npm run setup:codex            # OpenAI Codex CLI (TOML block)
+npm run setup:claude-desktop   # Anthropic Claude Desktop
+npm run setup:all              # every target at once
+```
 
 ### Via mcporter
 ```bash
