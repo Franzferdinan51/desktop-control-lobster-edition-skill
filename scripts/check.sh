@@ -152,7 +152,8 @@ check_python_deps() {
 
 check_adb() {
   if command -v adb >/dev/null 2>&1; then
-    local devices; devices="$(adb devices 2>/dev/null | tail -n +2 | grep -c 'device$')"
+    # grep -c returns exit 1 when no matches; || true prevents set -e from killing the script.
+    local devices; devices="$(adb devices 2>/dev/null | tail -n +2 | grep -c 'device$' || true)"
     if [[ "$devices" -gt 0 ]]; then
       record "adb" ok "$devices device(s) connected"
     else
@@ -166,7 +167,8 @@ check_adb() {
 check_server_status() {
   if (cd "$REPO_ROOT" && node src/server.js --status >/tmp/ndc-status.json 2>/tmp/ndc-status.err); then
     if node -e "const r = require('/tmp/ndc-status.json'); if (!r.desktop || !r.android) process.exit(1)" >/dev/null 2>&1; then
-      record "server-status" ok "server boots, all 3 backends reported"
+      local count; count="$(node -e "console.log(Object.keys(require('/tmp/ndc-status.json')).filter(k => ['desktop','cua','android','codex'].includes(k) && require('/tmp/ndc-status.json')[k].available).length)")"
+      record "server-status" ok "$count backend(s) available (desktop/cua/android/codex)"
     else
       record "server-status" warn "server boots but did not report all backends" true
     fi
