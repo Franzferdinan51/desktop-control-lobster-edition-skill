@@ -1,7 +1,7 @@
 {
   "name": "newest-desktop-control",
   "version": "1.0.0",
-  "description": "Consolidated MCP gateway for desktop and Android control.",
+  "description": "One MCP server for agent control across macOS, Linux, Windows, Codex Computer Use, and Android devices. Consolidates desktop-control, computer-use, and ADB tools behind a single gateway.",
   "type": "module",
   "main": "src/server.js",
   "scripts": {
@@ -22,5 +22,6 @@
   },
   "engines": {
     "node": ">=18"
-  }
+  },
+  "license": "MIT"
 }
