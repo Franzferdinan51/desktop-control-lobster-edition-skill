@@ -24,16 +24,34 @@ def main():
         return
 
     if action == "mouse_move":
+        # Default duration 0.0 — caller's choice. NOTE: instant jumps on macOS can be
+        # silently absorbed by the OS (CGEventPost coalescing). Pass duration > 0
+        # (e.g. 0.05) for any move that needs verification, or set verify=True.
+        requested = (args["x"], args["y"])
         pyautogui.moveTo(args["x"], args["y"], duration=args.get("duration", 0))
-        print(json.dumps({"ok": True}))
+        result = {"ok": True, "requested": list(requested)}
+        if args.get("verify"):
+            actual = pyautogui.position()
+            result["actual"] = [actual.x, actual.y]
+            result["drift"] = [actual.x - requested[0], actual.y - requested[1]]
+        print(json.dumps(result))
         return
 
     if action == "mouse_click":
+        # Default click duration 0.05s so the OS has time to register the move
+        # before the press — fixes "click landed on wrong target" on retina/scaled
+        # screens where instant moves can be dropped.
+        click_duration = args.get("duration", 0.05)
         if "x" in args and "y" in args:
-            pyautogui.click(args["x"], args["y"], button=args.get("button", "left"), clicks=args.get("clicks", 1))
+            pyautogui.moveTo(args["x"], args["y"], duration=click_duration)
+            pyautogui.click(button=args.get("button", "left"), clicks=args.get("clicks", 1))
         else:
             pyautogui.click(button=args.get("button", "left"), clicks=args.get("clicks", 1))
-        print(json.dumps({"ok": True}))
+        result = {"ok": True}
+        if args.get("verify"):
+            actual = pyautogui.position()
+            result["actual"] = [actual.x, actual.y]
+        print(json.dumps(result))
         return
 
     if action == "mouse_scroll":
@@ -99,7 +117,9 @@ def main():
         return
 
     if action == "mouse_hover":
-        pyautogui.moveTo(args["x"], args["y"], duration=args.get("duration", 0))
+        # Hover needs a tiny settle time so the target element actually receives
+        # the mouseenter event (instant moves can be skipped by the hover subsystem).
+        pyautogui.moveTo(args["x"], args["y"], duration=args.get("duration", 0.1))
         print(json.dumps({"ok": True}))
         return
 
