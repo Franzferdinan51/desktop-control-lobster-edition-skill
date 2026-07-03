@@ -6,7 +6,11 @@ import sys
 
 
 def main():
-    request = json.loads(sys.stdin.read() or "{}")
+    # Use sys.stdin.buffer.read() for reliable binary stdin on Windows (Node.js
+    # spawns Python with a pipe that can return empty from sys.stdin.read()
+    # but always works via sys.stdin.buffer). Safe on macOS/Linux too.
+    stdin_data = sys.stdin.buffer.read() if hasattr(sys.stdin, 'buffer') else sys.stdin.read()
+    request = json.loads(stdin_data or b"{}")
     action = request.get("action")
     args = request.get("args", {})
 
