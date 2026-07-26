@@ -2,9 +2,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { imageResult, jsonResult, textResult } from '../response.js';
 import { runFile, runFileWithInput } from '../process.js';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PY_ACTION = join(__dirname, '..', '..', 'scripts', 'pyautogui_action.py');
@@ -178,14 +178,19 @@ export function createDesktopBackend(options = {}) {
 
     async screenshot(args = {}) {
       if (platform === 'darwin') {
+        const captureDirectory = await mkdtemp(join(tmpdir(), 'newest-desktop-control-'));
+        const capturePath = join(captureDirectory, 'screenshot.png');
         const commandArgs = ['-x', '-t', 'png'];
         if (args.region) commandArgs.push('-R', args.region.join(','));
-        commandArgs.push('-');
-        const { stdout } = await runFile('screencapture', commandArgs, {
-          encoding: 'buffer',
-          maxBuffer: 1024 * 1024 * 50,
-        });
-        return imageResult(Buffer.from(stdout).toString('base64'));
+        commandArgs.push(capturePath);
+        try {
+          await runFile('screencapture', commandArgs, { timeout: 30000 });
+          const image = await readFile(capturePath);
+          if (!image.length) throw new Error('screencapture returned an empty image.');
+          return imageResult(image.toString('base64'));
+        } finally {
+          await rm(captureDirectory, { recursive: true, force: true });
+        }
       }
       const result = await runPython('screenshot', args);
       return imageResult(result.image);
