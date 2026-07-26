@@ -95,11 +95,6 @@ const cuaToolSpecs = [
     },
   ],
   [
-    'desktop_launch_app',
-    'Launch a macOS app in the background — the target does NOT come to the foreground.',
-    { name: { type: 'string' }, bundle_id: { type: 'string' } },
-  ],
-  [
     'desktop_som_capture',
     'Capture a window screenshot with SOM-labeled AX tree. Returns {image, title, elements:[{element_index, role, label, frame}], tree_markdown}. Click via desktop_click_element(element_index=N) afterwards.',
     {

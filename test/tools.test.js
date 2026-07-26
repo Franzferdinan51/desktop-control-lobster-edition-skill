@@ -21,6 +21,15 @@ test('registry includes explicit desktop, android, diagnostic, and alias tools',
   assert.ok(names.includes('terminal'));
 });
 
+test('tools/list advertises globally unique tool names', () => {
+  const registry = createToolRegistry();
+  const names = registry.listTools().tools.map((tool) => tool.name);
+  const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
+  assert.deepEqual([...new Set(duplicates)], []);
+  assert.equal(names.filter((name) => name === 'desktop_launch_app').length, 1);
+  assert.equal(names.filter((name) => name === 'desktop_launch_app_cua').length, 1);
+});
+
 test('compatibility alias routes to matching desktop tool', async () => {
   const calls = [];
   const registry = createToolRegistry({
