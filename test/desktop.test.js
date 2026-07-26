@@ -14,6 +14,13 @@ import {
 test('platformLaunchCommand uses macOS open', () => {
   assert.deepEqual(platformLaunchCommand('darwin', { app: 'Safari' }), {
     command: 'open',
+    args: ['-g', '-a', 'Safari'],
+  });
+});
+
+test('platformLaunchCommand can explicitly foreground a macOS app', () => {
+  assert.deepEqual(platformLaunchCommand('darwin', { app: 'Safari', foreground: true }), {
+    command: 'open',
     args: ['-a', 'Safari'],
   });
 });

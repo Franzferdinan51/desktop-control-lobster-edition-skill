@@ -37,7 +37,7 @@ const desktopToolSpecs = [
   ['desktop_get_pixel_color', 'Get a desktop pixel color.', { x: { type: 'integer' }, y: { type: 'integer' } }, ['x', 'y']],
   ['desktop_clipboard_read', 'Read desktop clipboard text.', {}],
   ['desktop_clipboard_write', 'Write desktop clipboard text.', { text: { type: 'string' } }, ['text']],
-  ['desktop_launch_app', 'Launch or open a macOS app, app path, or URL.', { app: { type: 'string' }, path: { type: 'string' }, url: { type: 'string' } }],
+  ['desktop_launch_app', 'Launch or open an app, app path, or URL. On macOS it opens in the background by default so the MCP client keeps focus; set foreground=true only when needed.', { app: { type: 'string' }, path: { type: 'string' }, url: { type: 'string' }, foreground: { type: 'boolean' } }],
   ['desktop_window_list', 'List desktop windows or apps.', {}],
   ['desktop_window_activate', 'Activate a desktop window by title.', { title: { type: 'string' }, pid: { type: 'integer' } }],
   ['desktop_run_script', 'Run a local Python or shell script.', { path: { type: 'string' }, timeout: { type: 'integer', default: 30 } }, ['path']],

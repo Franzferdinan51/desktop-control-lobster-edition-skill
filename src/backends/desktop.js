@@ -97,8 +97,11 @@ export function platformLaunchCommand(platform, args = {}) {
   const target = args.url ?? args.path ?? args.app;
   if (!target) throw new Error('desktop_launch_app requires app, path, or url');
   if (platform === 'darwin') {
-    if (args.app && !args.path && !args.url) return { command: 'open', args: ['-a', String(args.app)] };
-    return { command: 'open', args: [String(target)] };
+    const backgroundArgs = args.foreground === true ? [] : ['-g'];
+    if (args.app && !args.path && !args.url) {
+      return { command: 'open', args: [...backgroundArgs, '-a', String(args.app)] };
+    }
+    return { command: 'open', args: [...backgroundArgs, String(target)] };
   }
   if (platform === 'win32') return { command: 'cmd.exe', args: ['/c', 'start', '', String(target)] };
   return { command: 'xdg-open', args: [String(target)] };
@@ -405,8 +408,9 @@ export function createDesktopBackend(options = {}) {
 
     async launchApp(args = {}) {
       const command = platformLaunchCommand(platform, args);
-      await runFile(command.command, command.args);
-      return textResult(`Launched ${args.url ?? args.path ?? args.app}`);
+      await runFile(command.command, command.args, { timeout: 5000 });
+      const mode = platform === 'darwin' && args.foreground !== true ? ' in the background' : '';
+      return textResult(`Launched ${args.url ?? args.path ?? args.app}${mode}`);
     },
 
     async windowList() {
