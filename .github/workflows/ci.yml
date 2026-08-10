@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run Node test suite
+        run: npm test
+
+      - name: Compile Python helpers
+        run: python3 -m py_compile scripts/pyautogui_action.py scripts/cua_action.py
+
+      - name: Check for old machine-specific path
+        shell: bash
+        run: |
+          if grep -Rni --exclude-dir=.git '/Users/duckets/' README.md SKILL.md docs src scripts test; then
+            echo 'Machine-specific personal path found.' >&2
+            exit 1
+          fi
