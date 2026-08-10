@@ -19,15 +19,18 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
+      - name: Install Python dependencies
+        run: python3 -m pip install -r requirements.txt
+
       - name: Run Node test suite
-        run: npm test
+        run: xvfb-run -a npm test
 
       - name: Compile Python helpers
         run: python3 -m py_compile scripts/pyautogui_action.py scripts/cua_action.py
