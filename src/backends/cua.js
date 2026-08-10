@@ -47,7 +47,8 @@ function pythonCmd(platform = process.platform) {
 }
 
 async function runCuaAction(action, args = {}) {
-  if (!resolveCuaDriverPath()) {
+  const cuaPath = resolveCuaDriverPath();
+  if (!cuaPath) {
     const searched = getDefaultCuaDriverPaths().join(', ') || '(none)';
     throw new Error(
       `cua-driver not found. Searched: ${searched}. ` +
@@ -58,7 +59,10 @@ async function runCuaAction(action, args = {}) {
     throw new Error(`cua_action.py not found at ${PY_ACTION}`);
   }
   const payload = JSON.stringify({ action, args });
-  const { stdout } = await runFileWithInput(pythonCmd(), [PY_ACTION], payload, { timeout: 30000 });
+  const { stdout } = await runFileWithInput(pythonCmd(), [PY_ACTION], payload, {
+    timeout: 30000,
+    env: { ...process.env, NEWEST_DC_CUA_DRIVER: cuaPath },
+  });
   const text = stdout.toString('utf8').trim();
   if (!text) return {};
   const parsed = JSON.parse(text);
