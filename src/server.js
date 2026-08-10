@@ -78,10 +78,21 @@ process.stdin.on('data', (chunk) => {
     const line = buffer.slice(0, newline).trim();
     buffer = buffer.slice(newline + 1);
     if (!line) continue;
+
+    let request;
     try {
-      void handle(JSON.parse(line));
+      request = JSON.parse(line);
     } catch (error) {
       send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: error.message } });
+      continue;
     }
+
+    void handle(request).catch((error) => {
+      send({
+        jsonrpc: '2.0',
+        id: request?.id ?? null,
+        error: { code: -32603, message: error?.message ?? 'Internal error' },
+      });
+    });
   }
 });
