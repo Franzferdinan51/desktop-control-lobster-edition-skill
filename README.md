@@ -1,34 +1,52 @@
 # Newest Desktop Control
 
-One MCP server for agent control across macOS, Linux, Windows, Codex Computer Use, and Android devices.
+[![CI](https://github.com/Franzferdinan51/desktop-control-lobster-edition-skill/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Franzferdinan51/desktop-control-lobster-edition-skill/actions/workflows/ci.yml)
 
-This repo replaces the older `desktop-control-lobster-edition-skill` Python skill layout with a consolidated Node.js MCP gateway. It merges the useful desktop-control surface from `gui-control-lobster`, `computer-use-lobster`, and `computer-use-tool`, then adds Android ADB controls and Codex Computer Use detection.
+A cross-platform MCP server that gives AI agents one desktop-control surface for **macOS, Linux, Windows, Android, Codex, Hermes, OpenClaw, and other MCP clients**.
 
-## What This Gives Agents
+Newest Desktop Control combines normal foreground desktop automation, native window management, Android ADB control, and an optional CUA backend for accessibility-driven background control where the user's real mouse does not need to move.
 
-- Desktop screenshots, mouse, keyboard, clipboard, screen, pixel, app launch, terminal, file, and window activation tools.
-- Compatibility aliases for the older `screenshot`, `mouse_click`, `keyboard`, and `computer_use_*` tool names.
-- Android phone and emulator control through ADB: screenshots, taps, swipes, text input, key events, app launch, UI dump, logcat, screen size, and focused activity.
-- Codex Computer Use discovery and ready-to-use MCP config generation for the supported `SkyComputerUseClient mcp` entry point.
-- Diagnostics for dependencies, permissions, and backend availability.
+## What it does
 
-## Important Boundary
+- Capture desktop or individual-window screenshots.
+- Move, click, drag, scroll, hover, right-click, and middle-click the mouse.
+- Type text, press keys, and send hotkeys.
+- Read/write the clipboard.
+- Read pixels, screen size, monitors, processes, and active-window information.
+- List, focus, minimize, maximize, restore, move, resize, and close windows.
+- Launch applications, paths, and URLs.
+- Run local scripts and shell commands and read/write local files.
+- Find screen images and wait for UI images to appear.
+- OCR visible UI text.
+- Control Android phones and emulators through ADB.
+- Use optional `cua-driver` tools for accessibility-tree/SOM control without normal cursor movement.
+- Generate ready-to-paste MCP configuration for Hermes, OpenClaw, Codex CLI, Claude Desktop, and generic MCP clients.
+- Report backend, dependency, and permission status.
 
-Codex Computer Use is proprietary. This project does not decompile, patch, re-sign, copy, or bypass the Codex app bundle. It detects supported integration points and exposes fallback desktop controls through macOS utilities and PyAutoGUI.
+## Architecture
 
-The desktop, terminal, file-write, and Android tools are powerful. Only expose this MCP server to agents and clients you trust.
-
-## Quick Start
-
-```bash
-npm test
-npm run status
-npm start
+```text
+                  MCP client / AI agent
+                         |
+                         v
+                  src/server.js
+                         |
+                  src/tools.js
+              _________|__________
+             /         |          \
+            v          v           v
+       Desktop       Android       CUA
+       backend        ADB       cua-driver
+          |
+    ______|____________________________
+   /             |           |         \
+macOS          Linux       Windows   PyAutoGUI
+System Events  wmctrl       Win32    screen/input
 ```
 
-The server speaks JSON-RPC over stdio, as expected by Codex and other MCP clients.
+The ordinary desktop backend is intended for broad compatibility. CUA is optional and exists for agents that need structured accessibility data or background-style interaction.
 
-## Quick Install (any agent framework)
+## Quick start
 
 ```bash
 git clone https://github.com/Franzferdinan51/desktop-control-lobster-edition-skill.git
@@ -36,253 +54,25 @@ cd desktop-control-lobster-edition-skill
 bash scripts/install.sh --target hermes
 ```
 
-The installer detects your OS, installs Python dependencies, runs the test
-suite as a smoke check, and prints a ready-to-paste MCP config snippet for
-your agent framework.
+The installer checks the host OS, installs Python dependencies, runs the test suite, and prints an MCP configuration for the requested agent framework.
 
-### Per-framework one-liners
-
-```bash
-npm run setup:openclaw         # OpenClaw / DuckBot / generic gateway
-npm run setup:hermes           # Hermes Agent (NousResearch)
-npm run setup:codex            # OpenAI Codex CLI (TOML block)
-npm run setup:claude-desktop   # Anthropic Claude Desktop
-npm run setup:all              # every target at once
-```
-
-Each target also accepts `--out <file>` to write the config to disk. See
-`node scripts/setup-config.js --help` for all options.
-
-### Verify the install
-
-```bash
-npm run verify      # prints desktop / android / codex backend status
-npm test            # runs the 38-test suite
-npm run check       # full pre-flight health check (Node, Python, deps, server, tests)
-npm run inspect     # interactive REPL for calling tools
-npm run inspect:list # list every registered tool
-```
-
-## Requirements
-
-- Node.js 18 or newer.
-- macOS, Linux, or Windows for desktop automation.
-- Python 3 with PyAutoGUI, Pillow, pygetwindow, pytesseract, screeninfo, and psutil.
-- ADB for Android controls.
-- Codex.app on macOS if you want Codex Computer Use detection.
-
-The `scripts/install.sh` script installs the Python dependencies from
-`requirements.txt`. If you'd rather do it manually:
-
-```bash
-python3 -m pip install -r requirements.txt   # On Windows, use 'python' instead of 'python3'
-```
-
-Check Android availability:
-
-```bash
-adb devices -l
-```
-
-For physical Android phones, enable Developer Options and USB debugging. For emulators, start the emulator before calling Android tools.
-
-### Platform Notes
-
-macOS uses `screencapture`, `pbcopy`, `pbpaste`, `open`, and `osascript` where available.
-
-Linux uses PyAutoGUI for screen/input automation and native command-line tools for desktop integration:
-
-- `xdg-open` for app/path/URL launch.
-- `wmctrl` for window list and activation.
-- `wl-copy`/`wl-paste`, `xclip`, or `xsel` for clipboard.
-
-Windows uses PyAutoGUI for screen/input automation and PowerShell/cmd for desktop integration:
-
-- `powershell.exe` for clipboard, terminal commands, and window helpers.
-- `cmd.exe start` for app/path/URL launch.
-
-Window activation depends on the desktop environment and OS focus rules. Some Linux Wayland compositors and Windows elevated/non-elevated app boundaries may block focus changes.
-
-## Codex MCP Config
-
-The fastest way to get a Codex-ready config is:
-
-```bash
-npm run setup:codex
-```
-
-Or generate it manually and append to `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.newest-desktop-control]
-command = "node"
-args = ["/absolute/path/to/desktop-control-lobster-edition-skill/src/server.js"]
-startup_timeout_sec = 20
-tool_timeout_sec = 60
-```
-
-For example:
-
-```toml
-[mcp_servers.newest-desktop-control]
-command = "node"
-args = ["/Users/yourname/path/to/desktop-control-lobster-edition-skill/src/server.js"]
-startup_timeout_sec = 20
-tool_timeout_sec = 60
-```
-
-You can also ask the server for the detected Codex Computer Use MCP config:
-
-```json
-{
-  "method": "tools/call",
-  "params": {
-    "name": "codex_mcp_config",
-    "arguments": {}
-  }
-}
-```
-
-## Tool Groups
-
-Canonical tools are namespaced by backend. Compatibility aliases are kept so older agents do not have to change prompts immediately.
-
-### Desktop
-
-- `desktop_screenshot`
-- `desktop_mouse_move`
-- `desktop_mouse_click`
-- `desktop_mouse_scroll`
-- `desktop_mouse_drag`
-- `desktop_ocr`
-- `desktop_keyboard_type`
-- `desktop_keyboard_press`
-- `desktop_keyboard_hotkey`
-- `desktop_keyboard`
-- `desktop_cursor_position`
-- `desktop_get_screen_size`
-- `desktop_get_pixel_color`
-- `desktop_clipboard_read`
-- `desktop_clipboard_write`
-- `desktop_launch_app`
-- `desktop_window_list`
-- `desktop_window_activate`
-- `desktop_run_script`
-- `desktop_file_read`
-- `desktop_file_write`
-- `desktop_terminal`
-- `desktop_rs_lookup`
-
-### Desktop Compatibility Aliases
-
-- `screenshot`
-- `mouse_move`
-- `mouse_click`
-- `mouse_scroll`
-- `keyboard_type`
-- `keyboard_press`
-- `keyboard_hotkey`
-- `keyboard`
-- `cursor_position`
-- `get_screen_size`
-- `get_pixel_color`
-- `clipboard_read`
-- `clipboard_write`
-- `launch_app`
-- `window_list`
-- `window_activate`
-- `run_script`
-- `file_read`
-- `file_write`
-- `terminal`
-- `rs_lookup`
-
-### Computer Use Compatibility Aliases
-
-- `computer_use_screenshot`
-- `computer_use_mouse_move`
-- `computer_use_mouse_click`
-- `computer_use_mouse_scroll`
-- `computer_use_keyboard`
-- `computer_use_cursor_position`
-- `computer_use_launch_app`
-
-### Android
-
-- `android_devices`
-- `android_screenshot`
-- `android_screen_size`
-- `android_current_activity`
-- `android_tap`
-- `android_swipe`
-- `android_text`
-- `android_key`
-- `android_launch_app`
-- `android_ui_dump`
-- `android_logcat`
-
-### Diagnostics
-
-- `backend_status`
-- `codex_mcp_config`
-- `permissions_check`
-
-## Desktop Permissions
-
-Operating systems may block screenshots and input automation until the host process has permission.
-
-On macOS, grant permissions to the app or terminal that launches this MCP server:
-
-- Screen Recording: required for screenshots.
-- Accessibility: required for mouse and keyboard automation.
-- Automation: may be required for AppleScript window activation.
-
-After changing permissions, restart the MCP client or terminal.
-
-On Linux, PyAutoGUI requires access to the active graphical session. Wayland environments may require compositor-specific permissions or XWayland fallback.
-
-On Windows, run the MCP server in the same user session as the apps you want to control. Elevated apps may not accept input from a non-elevated MCP server.
-
-## Why MCP
-
-MCP is the right outer protocol for this project because Codex and other agent clients can load MCP servers directly. The current Codex app also packages Computer Use as an MCP server entry, so this gateway follows the supported shape instead of trying to reverse engineer private internals.
-
-The routing model is:
-
-- Use Codex Computer Use when its supported `SkyComputerUseClient mcp` command is available.
-- Use local OS commands and PyAutoGUI controls for desktop fallback and compatibility.
-- Use ADB for phones and Android emulators.
-
-## Development
-
-Run the test suite:
-
-```bash
-npm test
-```
-
-Check backend availability:
-
-```bash
-npm run status
-```
-
-Run the full pre-flight health check (Node, Python, pip, Python deps, ADB,
-server boot, and the test suite):
+Then verify the installation:
 
 ```bash
 npm run check
-npm run check -- --json     # JSON output for CI / agent workflows
-npm run check -- --no-tests # skip the test-suite step
+npm run status
+npm test
 ```
 
-Start the MCP server:
+Start the MCP server directly with:
 
 ```bash
 npm start
 ```
 
-Generate MCP config snippets for any agent framework:
+The server communicates over JSON-RPC/MCP using stdio.
+
+## Generate MCP configuration
 
 ```bash
 npm run setup:openclaw
@@ -292,42 +82,299 @@ npm run setup:claude-desktop
 npm run setup:all
 ```
 
-Run the cross-platform installer (also accepts a target):
+You can also call the generator directly:
 
 ```bash
-bash scripts/install.sh
-bash scripts/install.sh --target hermes
+node scripts/setup-config.js --help
+node scripts/setup-config.js hermes
+node scripts/setup-config.js codex
 ```
 
-Try out tools interactively:
+### Codex CLI example
+
+```toml
+[mcp_servers.newest-desktop-control]
+command = "node"
+args = ["/absolute/path/to/desktop-control-lobster-edition-skill/src/server.js"]
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+```
+
+## Requirements
+
+### Core
+
+- Node.js 18 or newer.
+- Python 3.
+- Python packages from `requirements.txt`.
+- A graphical desktop session for normal PyAutoGUI interaction.
+
+Install Python dependencies manually if needed:
 
 ```bash
-npm run inspect          # REPL: prompt for tool + JSON args
-npm run inspect:list     # list every registered tool
-node scripts/inspect.js desktop_screenshot '{}'   # one-shot call
-node scripts/inspect.js --server                  # boot server in --status mode
+python3 -m pip install -r requirements.txt
 ```
 
-The implementation is intentionally small:
+On Windows use `python` instead of `python3` if that is how Python is installed.
 
-- `src/server.js` handles MCP JSON-RPC over stdio.
-- `src/tools.js` defines tools, aliases, and routing.
-- `src/backends/desktop.js` implements macOS, Linux, Windows, and PyAutoGUI-backed controls.
-- `src/backends/android.js` implements ADB-backed controls.
-- `src/backends/codex.js` detects Codex Computer Use and emits supported config.
-- `scripts/pyautogui_action.py` performs PyAutoGUI actions from Node.
-- `scripts/install.sh` and `scripts/setup-config.js` handle OS detection,
-  dependency install, and per-framework MCP config generation.
-- `scripts/check.sh` is the pre-flight health check.
-- `scripts/inspect.js` is the interactive tool-caller.
+### macOS
 
-For an **AI agent integrating with this server**, see
-[`docs/AGENTS.md`](docs/AGENTS.md). It covers tool groupings, safety
-guidance, and worked examples.
+The backend uses native macOS facilities where they are more reliable than generic Python wrappers:
 
-## Status
+- `screencapture` for screenshots.
+- `System Events` / AppleScript for window discovery and management.
+- `pbcopy` / `pbpaste` for clipboard access.
+- `open` for launching applications, files, and URLs.
 
-Validated locally with:
+Grant **Screen Recording** and **Accessibility** permissions to the application or terminal that launches the MCP server. AppleScript window operations may also require Automation permission.
+
+### Linux
+
+Linux uses:
+
+- PyAutoGUI for normal screen/input automation.
+- `wmctrl` for native window listing, activation, movement, resize, minimize/maximize/restore, and close operations.
+- `xdg-open` for launching paths and URLs.
+- `wl-copy`/`wl-paste`, `xclip`, or `xsel` for clipboard access.
+
+Install `wmctrl` if it is missing. Example on Debian/Ubuntu:
+
+```bash
+sudo apt install wmctrl
+```
+
+Wayland compositors can intentionally restrict global input, screenshots, or window manipulation. X11/XWayland generally exposes more of this functionality.
+
+### Windows
+
+Windows uses:
+
+- PyAutoGUI for normal screen/input automation.
+- PowerShell plus Win32 APIs for native window discovery, focus, move, resize, minimize, maximize, restore, and close operations.
+- PowerShell for clipboard access and shell integration.
+- `cmd.exe start` for launching applications, paths, and URLs.
+
+The MCP server should normally run in the same user/elevation session as the applications being controlled. Windows security boundaries can prevent a non-elevated process from manipulating an elevated application.
+
+## Window management
+
+Window management is handled by the operating system backend rather than depending on `PyGetWindow` as a universal abstraction.
+
+Supported operations include:
+
+```text
+desktop_get_all_windows
+desktop_get_window_info
+desktop_focus_window
+desktop_window_activate
+desktop_screenshot_window
+desktop_minimize_window
+desktop_maximize_window
+desktop_restore_window
+desktop_move_window
+desktop_resize_window
+desktop_close_window
+```
+
+Window matching is title-based for the public MCP schemas, with partial-title matching used where the platform allows it. Internal backend paths can also resolve PIDs where available.
+
+`desktop_screenshot_window` resolves native window geometry first, then captures only that screen region instead of relying on PyGetWindow's platform support.
+
+Window managers and operating systems still have the final say. A Wayland compositor, macOS privacy setting, Windows integrity boundary, or application-specific restriction can reject an otherwise valid operation.
+
+## CUA / background desktop control
+
+The optional CUA backend wraps [`trycua/cua`](https://github.com/trycua/cua) `cua-driver`.
+
+Unlike the normal PyAutoGUI path, CUA can work from platform accessibility information and can target elements using structured handles instead of only screen coordinates.
+
+Install it with:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.sh)"
+```
+
+Then verify:
+
+```bash
+cua-driver --version
+npm run status
+```
+
+On macOS grant Accessibility and Screen Recording permissions to `/Applications/CuaDriver.app`.
+
+If the driver lives somewhere unusual, set:
+
+```bash
+export NEWEST_DC_CUA_DRIVER=/custom/path/to/cua-driver
+```
+
+The backend resolves the actual driver path and passes that resolved path through to the Python CUA shim, so Homebrew, `/usr/local`, `~/.local/bin`, and explicit overrides are handled consistently.
+
+Important CUA tools include:
+
+```text
+desktop_ax_tree
+desktop_list_apps
+desktop_som_capture
+desktop_click_element
+desktop_drag_element
+desktop_type_into
+desktop_key_combo
+desktop_focus_app
+desktop_launch_app_cua
+desktop_kill_app
+desktop_screenshot_prompt_guard
+desktop_evict_screenshots
+```
+
+A useful agent loop is:
+
+```text
+1. desktop_list_apps
+2. desktop_som_capture(pid=...)
+3. inspect element_index values
+4. desktop_click_element(pid=..., element_index=...)
+5. optionally capture_after=true for verification
+```
+
+## Android
+
+Android control uses ADB and works with physical phones or emulators.
+
+Check connectivity:
+
+```bash
+adb devices -l
+```
+
+For physical devices, enable Developer Options and USB debugging.
+
+Available Android tools include:
+
+```text
+android_devices
+android_screenshot
+android_screen_size
+android_current_activity
+android_tap
+android_swipe
+android_text
+android_key
+android_launch_app
+android_ui_dump
+android_logcat
+```
+
+## Desktop tools
+
+The normal desktop tool set includes:
+
+```text
+desktop_screenshot
+desktop_mouse_move
+desktop_mouse_click
+desktop_mouse_scroll
+desktop_mouse_drag
+desktop_mouse_double_click
+desktop_mouse_hover
+desktop_mouse_right_click
+desktop_mouse_middle_click
+
+desktop_keyboard_type
+desktop_keyboard_press
+desktop_keyboard_hotkey
+desktop_keyboard
+desktop_key_down
+desktop_key_up
+
+desktop_cursor_position
+desktop_get_screen_size
+desktop_get_pixel_color
+desktop_get_monitors
+
+desktop_get_active_window
+desktop_get_all_windows
+desktop_get_window_info
+desktop_focus_window
+desktop_window_list
+desktop_window_activate
+desktop_minimize_window
+desktop_maximize_window
+desktop_restore_window
+desktop_move_window
+desktop_resize_window
+desktop_close_window
+desktop_screenshot_window
+
+desktop_find_image
+desktop_wait_for_image
+desktop_ocr
+
+desktop_clipboard_read
+desktop_clipboard_write
+desktop_launch_app
+desktop_run_script
+desktop_file_read
+desktop_file_write
+desktop_terminal
+desktop_list_processes
+desktop_kill_process
+```
+
+Compatibility aliases are retained for older prompts and integrations, including names such as `screenshot`, `mouse_click`, `keyboard`, `launch_app`, and `computer_use_*`.
+
+List the exact tool registry on your installed version with:
+
+```bash
+npm run inspect:list
+```
+
+## Diagnostics
+
+```bash
+npm run status
+npm run check
+npm run check -- --json
+npm run check -- --no-tests
+npm run inspect
+npm run inspect:list
+```
+
+The diagnostic MCP tools are:
+
+```text
+backend_status
+permissions_check
+codex_mcp_config
+```
+
+`backend_status` reports desktop, CUA, Android, and Codex availability along with relevant platform capability details.
+
+## Safety
+
+This server exposes powerful capabilities: input control, process termination, shell execution, file writes, and Android device access.
+
+Do not expose it to untrusted remote clients or agents.
+
+A few protections are built in:
+
+- `desktop_kill_app` blocks PID 1 and reserved/system PID ranges.
+- CUA screenshot prompt guarding can scan visible text for common prompt-injection patterns.
+- CUA screenshot history can be explicitly evicted to reduce unnecessary image/context retention.
+- Tool calls return MCP error results instead of intentionally crashing the server on ordinary handler failures.
+
+These protections do **not** turn arbitrary shell or desktop control into a sandbox. The security boundary is still the OS account running the MCP server.
+
+## Codex Computer Use boundary
+
+Codex Computer Use is proprietary. This project does not decompile, patch, re-sign, copy, or bypass the Codex application bundle.
+
+The Codex backend detects supported integration points and can generate compatible MCP configuration. Normal desktop functionality remains available independently through the local desktop backend.
+
+## Development
+
+Run everything before committing:
 
 ```bash
 npm test
@@ -335,4 +382,44 @@ npm run status
 npm run check
 ```
 
-The test suite covers MCP initialization compatibility, tool registration, alias routing, Android command construction, Android parsers, Codex config generation, env-overridable RS helper resolution, the new 7-tool desktop expansion (hover / right / middle / focus / screenshot-window / get-window-info / wait-for-image), the setup-config CLI for all six targets, and the inspect.js CLI for the read-only subset.
+Useful developer commands:
+
+```bash
+npm run inspect
+npm run inspect:list
+node scripts/inspect.js desktop_get_screen_size '{}'
+node scripts/inspect.js --server
+```
+
+The main implementation files are:
+
+```text
+src/server.js                MCP JSON-RPC server
+src/tools.js                 tool schemas, aliases, routing
+src/backends/desktop.js      desktop + native window management
+src/backends/android.js      ADB backend
+src/backends/codex.js        Codex detection/config
+src/backends/cua.js          CUA backend
+scripts/pyautogui_action.py   PyAutoGUI helper
+scripts/cua_action.py         cua-driver helper
+scripts/setup-config.js       MCP config generator
+scripts/install.sh            installer
+scripts/check.sh              health checker
+scripts/inspect.js            interactive tool inspector
+```
+
+For agent-facing integration guidance, see [`docs/AGENTS.md`](docs/AGENTS.md).
+
+## Testing and CI
+
+`main` is checked by GitHub Actions on every push and pull request.
+
+CI currently covers the Node test suite, Python helper compilation, dependency health, MCP initialization, tool registration, alias routing, Android command construction/parsing, CUA routing and safety behavior, configuration generation, CLI behavior, and regression checks for machine-specific path leakage.
+
+Some live GUI/CUA checks are intentionally skipped in the headless Linux runner because they require a real graphical desktop or an installed `cua-driver`. Run `npm run check` on the target machine to validate those host-specific capabilities.
+
+## License / project status
+
+This is an actively developed agent-control project. Treat OS desktop automation as inherently environment-dependent: operating-system updates, desktop environments, permissions, and security boundaries can change what a host allows.
+
+Bug reports and targeted platform fixes are welcome.
