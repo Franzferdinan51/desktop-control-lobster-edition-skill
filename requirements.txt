@@ -1,6 +1,6 @@
 pyautogui
 Pillow
-pygetwindow
+pygetwindow; platform_system == "Windows"
 pytesseract
 screeninfo
 psutil
