@@ -22,7 +22,6 @@ const candidateClientPaths = [
     homedir(),
     '.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient',
   ),
-  '/Users/duckets/Desktop/computer-use-lobster/packages/computer-use-bundle/SkyComputerUseClient',
 ];
 
 export function findCodexComputerUseClient() {
