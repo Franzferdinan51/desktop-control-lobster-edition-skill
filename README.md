@@ -121,12 +121,12 @@ startup_timeout_sec = 20
 tool_timeout_sec = 60
 ```
 
-From this repo on the original machine, the path was:
+For example:
 
 ```toml
 [mcp_servers.newest-desktop-control]
 command = "node"
-args = ["/Users/duckets/Desktop/Newest Desktop Control/src/server.js"]
+args = ["/Users/yourname/path/to/desktop-control-lobster-edition-skill/src/server.js"]
 startup_timeout_sec = 20
 tool_timeout_sec = 60
 ```
