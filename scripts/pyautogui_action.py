@@ -3,6 +3,7 @@ import base64
 import io
 import json
 import sys
+import time
 
 
 def main():
@@ -28,9 +29,6 @@ def main():
         return
 
     if action == "mouse_move":
-        # Default duration 0.0 — caller's choice. NOTE: instant jumps on macOS can be
-        # silently absorbed by the OS (CGEventPost coalescing). Pass duration > 0
-        # (e.g. 0.05) for any move that needs verification, or set verify=True.
         requested = (args["x"], args["y"])
         pyautogui.moveTo(args["x"], args["y"], duration=args.get("duration", 0))
         result = {"ok": True, "requested": list(requested)}
@@ -42,9 +40,6 @@ def main():
         return
 
     if action == "mouse_click":
-        # Default click duration 0.05s so the OS has time to register the move
-        # before the press — fixes "click landed on wrong target" on retina/scaled
-        # screens where instant moves can be dropped.
         click_duration = args.get("duration", 0.05)
         if "x" in args and "y" in args:
             pyautogui.moveTo(args["x"], args["y"], duration=click_duration)
@@ -102,7 +97,6 @@ def main():
     if action == "ocr":
         try:
             import pytesseract
-            from PIL import Image
             region = args.get("region")
             lang = args.get("language", "eng")
             image = pyautogui.screenshot(region=tuple(region) if region else None)
@@ -121,8 +115,6 @@ def main():
         return
 
     if action == "mouse_hover":
-        # Hover needs a tiny settle time so the target element actually receives
-        # the mouseenter event (instant moves can be skipped by the hover subsystem).
         pyautogui.moveTo(args["x"], args["y"], duration=args.get("duration", 0.1))
         print(json.dumps({"ok": True}))
         return
@@ -143,10 +135,12 @@ def main():
                 wins = gw.getWindowsWithTitle(title)
                 if wins:
                     wins[0].activate()
-                    wins[0].restore()  # bring to front
-            print(json.dumps({"ok": True}))
+                    wins[0].restore()
+                    print(json.dumps({"ok": True, "found": True}))
+                    return
+            print(json.dumps({"ok": False, "found": False, "error": "window not found"}))
         except Exception as e:
-            print(json.dumps({"error": str(e)}))
+            print(json.dumps({"error": str(e), "ok": False}))
         return
 
     if action == "middle_click":
@@ -160,18 +154,20 @@ def main():
     if action == "wait_for_image":
         try:
             image_path = args.get("image_path")
-            timeout = float(args.get("timeout", 10))
+            if not image_path:
+                print(json.dumps({"error": "image_path required", "found": False}))
+                return
+            timeout = max(0.0, float(args.get("timeout", 10)))
             confidence = float(args.get("confidence", 0.9))
-            start = time.time() if 'time' in dir() else 0
-            import time
-            while time.time() - start < timeout:
+            start = time.monotonic()
+            while time.monotonic() - start < timeout:
                 try:
                     loc = pyautogui.locateOnScreen(image_path, confidence=confidence)
                     if loc:
                         center = pyautogui.center(loc)
                         print(json.dumps({"found": True, "x": center.x, "y": center.y}))
                         return
-                except:
+                except Exception:
                     pass
                 time.sleep(0.5)
             print(json.dumps({"found": False}))
@@ -187,7 +183,6 @@ def main():
                 wins = gw.getWindowsWithTitle(title)
                 if wins:
                     win = wins[0]
-                    # Bring to front briefly for capture
                     win.activate()
                     time.sleep(0.3)
                     region = (win.left, win.top, win.width, win.height)
@@ -245,7 +240,6 @@ def main():
             else:
                 print(json.dumps({"title": None}))
         except Exception:
-            # Fallback: no pygetwindow
             print(json.dumps({"title": None, "note": "pygetwindow not installed"}))
         return
 
@@ -285,11 +279,13 @@ def main():
             pyautogui.hscroll(-amount)
         elif direction == "right":
             pyautogui.hscroll(amount)
+        else:
+            print(json.dumps({"ok": False, "error": f"unknown scroll direction: {direction}"}))
+            return
         print(json.dumps({"ok": True}))
         return
 
     if action == "wait":
-        import time
         time.sleep(float(args.get("seconds", 1)))
         print(json.dumps({"ok": True}))
         return
@@ -300,7 +296,6 @@ def main():
             import platform
             windows = []
             if platform.system() == 'Darwin':
-                # pygetwindow on macOS has no getAllWindows; surface titles via getAllTitles
                 for title in gw.getAllTitles():
                     if title:
                         windows.append({"title": title, "left": None, "top": None, "width": None, "height": None, "isActive": False, "isMinimized": False, "isMaximized": False})
@@ -322,86 +317,30 @@ def main():
             print(json.dumps({"error": str(e), "windows": []}))
         return
 
-    if action == "minimize_window":
+    if action in {"minimize_window", "maximize_window", "restore_window", "close_window", "move_window", "resize_window"}:
         try:
             import pygetwindow as gw
             title = args.get("title")
-            if title:
-                wins = gw.getWindowsWithTitle(title)
-                if wins:
-                    wins[0].minimize()
-            print(json.dumps({"ok": True}))
+            wins = gw.getWindowsWithTitle(title) if title else []
+            if not wins:
+                print(json.dumps({"ok": False, "found": False, "error": "window not found"}))
+                return
+            win = wins[0]
+            if action == "minimize_window":
+                win.minimize()
+            elif action == "maximize_window":
+                win.maximize()
+            elif action == "restore_window":
+                win.restore()
+            elif action == "close_window":
+                win.close()
+            elif action == "move_window":
+                win.moveTo(args.get("x", 0), args.get("y", 0))
+            elif action == "resize_window":
+                win.resizeTo(args.get("width", 800), args.get("height", 600))
+            print(json.dumps({"ok": True, "found": True}))
         except Exception as e:
-            print(json.dumps({"error": str(e)}))
-        return
-
-    if action == "maximize_window":
-        try:
-            import pygetwindow as gw
-            title = args.get("title")
-            if title:
-                wins = gw.getWindowsWithTitle(title)
-                if wins:
-                    wins[0].maximize()
-            print(json.dumps({"ok": True}))
-        except Exception as e:
-            print(json.dumps({"error": str(e)}))
-        return
-
-    if action == "restore_window":
-        try:
-            import pygetwindow as gw
-            title = args.get("title")
-            if title:
-                wins = gw.getWindowsWithTitle(title)
-                if wins:
-                    wins[0].restore()
-            print(json.dumps({"ok": True}))
-        except Exception as e:
-            print(json.dumps({"error": str(e)}))
-        return
-
-    if action == "close_window":
-        try:
-            import pygetwindow as gw
-            title = args.get("title")
-            if title:
-                wins = gw.getWindowsWithTitle(title)
-                if wins:
-                    wins[0].close()
-            print(json.dumps({"ok": True}))
-        except Exception as e:
-            print(json.dumps({"error": str(e)}))
-        return
-
-    if action == "move_window":
-        try:
-            import pygetwindow as gw
-            title = args.get("title")
-            x = args.get("x", 0)
-            y = args.get("y", 0)
-            if title:
-                wins = gw.getWindowsWithTitle(title)
-                if wins:
-                    wins[0].moveTo(x, y)
-            print(json.dumps({"ok": True}))
-        except Exception as e:
-            print(json.dumps({"error": str(e)}))
-        return
-
-    if action == "resize_window":
-        try:
-            import pygetwindow as gw
-            title = args.get("title")
-            width = args.get("width", 800)
-            height = args.get("height", 600)
-            if title:
-                wins = gw.getWindowsWithTitle(title)
-                if wins:
-                    wins[0].resizeTo(width, height)
-            print(json.dumps({"ok": True}))
-        except Exception as e:
-            print(json.dumps({"error": str(e)}))
+            print(json.dumps({"error": str(e), "ok": False}))
         return
 
     if action == "get_monitors":
@@ -418,7 +357,6 @@ def main():
                 })
             print(json.dumps({"monitors": monitors}))
         except Exception:
-            # Fallback to single screen
             size = pyautogui.size()
             print(json.dumps({"monitors": [{"x": 0, "y": 0, "width": size.width, "height": size.height, "is_primary": True}]}))
         return
@@ -430,9 +368,9 @@ def main():
             for p in psutil.process_iter(['pid', 'name', 'exe']):
                 try:
                     procs.append(p.info)
-                except:
+                except Exception:
                     pass
-            print(json.dumps({"processes": procs[:50]}))  # limit
+            print(json.dumps({"processes": procs[:50]}))
         except Exception as e:
             print(json.dumps({"error": str(e), "processes": []}))
         return
