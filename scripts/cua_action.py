@@ -12,11 +12,11 @@ alongside you.
 Install:
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.sh)"
 
-This adds /Users/<you>/.local/bin/cua-driver to PATH and /Applications/CuaDriver.app.
+This adds ~/.local/bin/cua-driver to PATH and /Applications/CuaDriver.app on macOS.
 On first run you'll be prompted for Accessibility + Screen Recording permissions (macOS).
 
 Wire into Newest Desktop Control:
-    NEWEST_DC_CUA_DRIVER=/Users/duckets/.local/bin/cua-driver   # optional, this is the default
+    NEWEST_DC_CUA_DRIVER=~/.local/bin/cua-driver   # optional override
 
 This script reads JSON from stdin: {"action": "...", "args": {...}} and writes JSON to stdout.
 """
@@ -35,7 +35,6 @@ CUA_DRIVER = os.environ.get("NEWEST_DC_CUA_DRIVER") or os.path.expanduser("~/.lo
 
 
 def _is_control_char(c):
-    """Cross-Python: unicodedata.category('NUL') is 'Cc' (control), etc."""
     return unicodedata.category(c).startswith("Cc")
 
 
@@ -47,7 +46,6 @@ def _normalize(s):
 
 
 def _driver_call(tool, args=None):
-    """Invoke `cua-driver call <tool> '<json>'` and parse the response."""
     payload = json.dumps(args or {})
     try:
         result = subprocess.run(
@@ -66,8 +64,6 @@ def _driver_call(tool, args=None):
     out = (result.stdout or "").strip()
     if not out:
         raise RuntimeError(f"cua-driver {tool} returned no output. stderr={result.stderr!r}")
-    # Strip leading non-JSON lines (cua-driver sometimes emits ✅ emoji + plain text
-    # before/after the JSON payload). Find the first line that starts with { or [.
     json_start = -1
     for i, line in enumerate(out.splitlines()):
         stripped = line.lstrip()
@@ -75,23 +71,20 @@ def _driver_call(tool, args=None):
             json_start = i
             break
     if json_start == -1:
-        # Pure text response — wrap as result
+        if result.returncode != 0:
+            raise RuntimeError(f"cua-driver {tool} failed ({result.returncode}): {result.stderr or out}")
         return {"_text": out, "_ok": True}
     cleaned = "\n".join(out.splitlines()[json_start:])
     try:
-        return json.loads(cleaned)
+        parsed = json.loads(cleaned)
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"cua-driver {tool} returned non-JSON: {cleaned[:200]}") from exc
+    if result.returncode != 0:
+        raise RuntimeError(f"cua-driver {tool} failed ({result.returncode}): {parsed}")
+    return parsed
 
-
-# ---------------------------------------------------------------------------
-# Screenshot (delegates to get_window_state or pyautogui fallback)
-# ---------------------------------------------------------------------------
 
 def action_screenshot(args, computer):
-    """Capture full-screen via `cua-driver call zoom` with a window_id is not enough;
-    for full-screen we use the same approach as pyautogui_action: `screencapture -x` on macOS.
-    If a pid is provided, we use get_window_state's PNG."""
     import platform
     if platform.system() == "Darwin":
         cmd = ["screencapture", "-x", "-t", "png", "-"]
@@ -100,7 +93,7 @@ def action_screenshot(args, computer):
             raise RuntimeError(f"screencapture failed: {proc.stderr.decode('utf-8', 'ignore')}")
         return {
             "image": base64.b64encode(proc.stdout).decode("ascii"),
-            "width": 0,  # callers can re-decode if they need exact dims
+            "width": 0,
             "height": 0,
             "source": "screencapture",
         }
@@ -116,16 +109,10 @@ def action_screenshot_window(args, computer):
     return {"image": img_b64, "pid": pid, "title": state.get("title"), "source": "cua-driver"}
 
 
-# ---------------------------------------------------------------------------
-# Accessibility tree (full snapshot of all apps + per-window elements)
-# ---------------------------------------------------------------------------
-
 def _resolve_window_id(pid, prefer_on_screen=True):
-    """Find a window_id for the given pid. Prefer on-screen + on current Space + largest bounds."""
     wins = _driver_call("list_windows", {"pid": int(pid), "on_screen_only": prefer_on_screen}).get("windows", [])
     if not wins:
         return None
-    # Sort: on-screen + current space first, then by z-index desc, then by area desc
     def _score(w):
         return (
             1 if w.get("is_on_screen") else 0,
@@ -138,11 +125,6 @@ def _resolve_window_id(pid, prefer_on_screen=True):
 
 
 def action_ax_tree(args, computer):
-    """List all visible apps + per-window structured AX elements.
-
-    Pass pid + window_id to get a deep snapshot of one window (with element_index handles).
-    Pass nothing for a cheap app-level overview.
-    """
     apps = _driver_call("list_apps", {})
     out = {
         "apps": [
@@ -181,10 +163,6 @@ def action_ax_tree(args, computer):
     return out
 
 
-# ---------------------------------------------------------------------------
-# List apps (lightweight)
-# ---------------------------------------------------------------------------
-
 def action_list_apps(args, computer):
     apps = _driver_call("list_apps", {})
     return {
@@ -202,15 +180,7 @@ def action_list_apps(args, computer):
     }
 
 
-# ---------------------------------------------------------------------------
-# Focus / bring-to-front (macOS doesn't need this — CGEventPostToPid reaches backgrounded apps,
-# but we expose `launch_app` for starting a fresh background process)
-# ---------------------------------------------------------------------------
-
 def action_focus_app(args, computer):
-    """On macOS, cua-driver dispatches input to the target pid directly, so 'focus' is
-    implicit. We expose this for parity with the pyautogui backend and for windows that
-    still need explicit foreground flash."""
     pid = int(args.get("pid", 0))
     name = args.get("name", "")
     if not pid and not name:
@@ -227,20 +197,14 @@ def action_focus_app(args, computer):
     return {"focused_pid": pid}
 
 
-# ---------------------------------------------------------------------------
-# Click / drag / type by element_index (from a prior get_window_state snapshot)
-# ---------------------------------------------------------------------------
-
 def action_click_element(args, computer):
-    """Click by element_index (preferred) or pid+x,y fallback."""
     pid = int(args.get("pid", 0))
+    if not pid:
+        raise RuntimeError("click_element requires pid")
     window_id = args.get("window_id") or _resolve_window_id(pid)
     element_index = args.get("element_index")
     button = args.get("button", "left")
-    if not pid:
-        raise RuntimeError("click_element requires pid")
     if element_index is not None:
-        # AX path — works on backgrounded windows, no cursor move
         out = _driver_call("click", {
             "pid": pid,
             "window_id": int(window_id) if window_id else None,
@@ -263,9 +227,9 @@ def action_click_element(args, computer):
 
 def action_drag_element(args, computer):
     pid = int(args.get("pid", 0))
-    window_id = args.get("window_id") or _resolve_window_id(pid)
     if not pid:
         raise RuntimeError("drag_element requires pid")
+    window_id = args.get("window_id") or _resolve_window_id(pid)
     from_index = args.get("from_index")
     to_index = args.get("to_index")
     out = _driver_call("drag", {
@@ -302,7 +266,6 @@ def action_key_combo(args, computer):
         raise RuntimeError("key_combo requires keys (list of key names)")
     pid = args.get("pid")
     if not pid:
-        # Find the frontmost app as a sensible default target
         apps = _driver_call("list_apps", {}).get("apps", [])
         active = next((a for a in apps if a.get("active")), None)
         if active:
@@ -318,15 +281,7 @@ def action_key_combo(args, computer):
     return {"pressed": keys, "result": out}
 
 
-# ---------------------------------------------------------------------------
-# SOM-style labeled screenshot (delegates to get_window_state som capture)
-# ---------------------------------------------------------------------------
-
 def action_som_capture(args, computer):
-    """Capture a window with SOM-labeled AX tree.
-
-    Returns: {image, title, elements: [{element_index, role, label, frame}], tree_markdown}.
-    """
     pid = int(args.get("pid", 0))
     if not pid:
         raise RuntimeError("som_capture requires pid")
@@ -351,10 +306,6 @@ def action_som_capture(args, computer):
         "window_id": int(window_id),
     }
 
-
-# ---------------------------------------------------------------------------
-# Cursor / window helpers
-# ---------------------------------------------------------------------------
 
 def action_cursor_position(args, computer):
     return _driver_call("get_cursor_position", {})
@@ -385,10 +336,6 @@ def action_launch_app(args, computer):
     out = _driver_call("launch_app", {"name": name, "background": True})
     return {"launched": name, "result": out}
 
-
-# ---------------------------------------------------------------------------
-# Dispatch table
-# ---------------------------------------------------------------------------
 
 ACTIONS = {
     "screenshot": action_screenshot,
