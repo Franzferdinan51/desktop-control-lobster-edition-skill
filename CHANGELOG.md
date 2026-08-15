@@ -93,10 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - **`desktop_rs_lookup`** is now env-overridable. The hardcoded
-  `'/Users/duckets/Desktop/rs-agent-tools/...'` path is gone. The new
-  resolution order is `NEWEST_DC_RS_TOOL_PATH` → `DUCKETS_RS_TOOL_PATH` →
-  `~/Desktop/rs-agent-tools/...` → `~/rs-agent-tools/...` → friendly error
-  message.
+  machine-specific path is gone. The new resolution order is
+  `NEWEST_DC_RS_TOOL_PATH` → `DUCKETS_RS_TOOL_PATH` → `~/rs-agent-tools/...` → friendly error message.
 - **README.md** now leads with a "Quick Install" section that covers
   every supported agent framework.
 
